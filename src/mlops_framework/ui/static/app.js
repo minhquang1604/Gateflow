@@ -2257,10 +2257,10 @@ async function initModelDetail(id) {
             // needed here (and Artifact-style sandboxes don't apply to
             // this deployed app, only to claude.ai's own preview).
             el("td", {}, el("a", { href: `${API}/model-versions/${v.id}/report` }, "report")),
-            el("td", { class: "row-actions" },
+            el("td", {}, el("div", { class: "row-actions" },
               // initModelDetail re-mounts both regions, so re-running
               // it is the refresh — this page has no load() of its own.
-              rollbackButton(v, () => initModelDetail(id))));
+              rollbackButton(v, () => initModelDetail(id)))));
         }) : [emptyRow(metricKeys.length + 7, "No versions registered yet.")])));
       tableHost.replaceChildren(table);
     }
@@ -2414,7 +2414,7 @@ async function initSchedules() {
           el("td", {}, s.last_training_run_id
             ? el("a", { href: `/runs/${s.last_training_run_id}` }, `#${s.last_training_run_id}`)
             : el("span", { class: "faint" }, "never")),
-          el("td", { class: "row-actions" }, toggleBtn, runNowBtn, deleteBtn));
+          el("td", {}, el("div", { class: "row-actions" }, toggleBtn, runNowBtn, deleteBtn)));
       }) : [emptyRow(7, "No schedules yet — click “New schedule” to add one.")])));
 
     out.replaceChildren(el("div", { class: "table-wrap" }, table));

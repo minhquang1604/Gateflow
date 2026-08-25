@@ -947,9 +947,27 @@ select:focus, input:focus { border-color: var(--accent); }
   color: var(--text-muted);
 }
 
-/* A table cell holding 2-3 small action buttons side by side. */
+/* A row of 2-3 small action buttons — always an inner wrapper, never
+ * applied to the <td> itself. It used to be the td's own class: setting
+ * display:flex directly on a table cell drops the plain stretch-to-
+ * row-height every *other* cell in the row gets for free, since a flex
+ * container sizes to its own content instead. A row whose action cell
+ * renders zero buttons (a PRODUCTION or REJECTED version, say, with
+ * nothing to offer) collapsed to just its own padding while its
+ * siblings in the same row stayed full height — height: 100% doesn't
+ * rescue it either, Chromium doesn't resolve a percentage height
+ * against an auto-sized row for a flex-display cell. border-bottom then
+ * landed wherever that shrunk box ended, well above the row's actual
+ * bottom edge: a border that cut short partway across the row instead
+ * of running the full width, most visible exactly where a reader is
+ * looking most closely — a table scrolled over so this is one of the
+ * only two columns left in view. Left as a plain <td> with this as an
+ * inner <div>, the cell is back to being an ordinary table cell (full
+ * row height, correct border, for free) and the div only ever has to
+ * size itself, empty or not. */
 .row-actions {
   display: flex;
+  align-items: center;
   gap: 6px;
   flex-wrap: wrap;
 }
