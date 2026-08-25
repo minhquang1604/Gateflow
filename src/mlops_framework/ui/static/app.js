@@ -3263,7 +3263,39 @@ function lineageIcon(type, small) {
 //   has nowhere to the side to run through, so it exits and re-enters
 //   the node's own right edge — a loop out and back, square-cornered
 //   instead of a bow.
-function lineageEdgeGeometry(e, pos, colOf, NODE_W, NODE_H) {
+// Two independent sources fanning out into the same column pair (two
+// dataset versions each feeding several training runs, say) used to
+// bend their vertical run through the exact same x — `midX` was just
+// the midpoint between the two columns, the same for every edge in that
+// pair regardless of which node it left from. Wherever their vertical
+// spans overlapped in y they drew on identical pixels, so a run trained
+// on v2 and a run trained on v1 read as one merged trunk with no way to
+// tell which dataset version a given run actually came from. Giving
+// each source its own bend-x lane — spread evenly across the column
+// gap, ordered top to bottom — turns that into parallel bus bars, the
+// same "whose line is this" fix the hub-splitting work made for
+// same-column edges, applied here across columns instead. Lo column,
+// not the edge itself, is the grouping key: every source in a given
+// column shares the same set of lanes, so run5's incoming edge and
+// run2's incoming edge (different targets, same source column) still
+// line up as parallel bars rather than each claiming their own.
+function computeSourceLanes(validEdges, colOf, pos) {
+  const bySourceCol = new Map();
+  for (const e of validEdges) {
+    const lo = colOf.get(e.source), hi = colOf.get(e.target);
+    if (hi - lo !== 1) continue; // same-column and skip edges route differently
+    if (!bySourceCol.has(lo)) bySourceCol.set(lo, new Set());
+    bySourceCol.get(lo).add(e.source);
+  }
+  const laneOf = new Map();
+  for (const sources of bySourceCol.values()) {
+    const ordered = [...sources].sort((a, b) => pos.get(a).y - pos.get(b).y);
+    ordered.forEach((id, index) => laneOf.set(id, { index, count: ordered.length }));
+  }
+  return laneOf;
+}
+
+function lineageEdgeGeometry(e, pos, colOf, NODE_W, NODE_H, laneOf) {
   const from = pos.get(e.source), to = pos.get(e.target);
   if (colOf.get(e.source) === colOf.get(e.target)) {
     // Two hubs per node, not two per column-pair: `from` is always
@@ -3283,7 +3315,10 @@ function lineageEdgeGeometry(e, pos, colOf, NODE_W, NODE_H) {
   }
   const y1 = from.y + NODE_H / 2, y2 = to.y + NODE_H / 2;
   const x1 = from.x + NODE_W, x2 = to.x;
-  const midX = (x1 + x2) / 2;
+  const lane = laneOf && laneOf.get(e.source);
+  const midX = lane
+    ? x1 + (x2 - x1) * (lane.index + 1) / (lane.count + 1)
+    : (x1 + x2) / 2;
 
   // A skip edge can have another node sitting in a column it passes
   // over. The default route here stays within the [y1, y2] band the
@@ -3393,7 +3428,8 @@ function renderLineageGraph(nodes, edges, rootId) {
       }, svgEl("path", { d: "M0,0 L8,4 L0,8 z", class: "lineage-edge-arrow" }))));
 
   const validEdges = edges.filter((e) => pos.has(e.source) && pos.has(e.target));
-  const geoms = validEdges.map((e) => lineageEdgeGeometry(e, pos, colOf, NODE_W, NODE_H));
+  const laneOf = computeSourceLanes(validEdges, colOf, pos);
+  const geoms = validEdges.map((e) => lineageEdgeGeometry(e, pos, colOf, NODE_W, NODE_H, laneOf));
 
   // Two orthogonal wires crossing on the page read as ambiguous —
   // "did these join, or did they just happen to cross?" — the one
