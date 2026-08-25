@@ -34,11 +34,13 @@ from mlops_framework.database.models.readiness_evaluation import (
     ReadinessEvaluation,
 )
 from mlops_framework.database.models.retraining_decision import (
+    DecisionRecordedBy,
     RetrainingDecision,
     RetrainingOutcomeStatus,
 )
 from mlops_framework.dataset.manager import DatasetManager
 from mlops_framework.events.publisher import InMemoryEventPublisher
+from mlops_framework.governance.decision_store import RetrainingDecisionStore
 from mlops_framework.governance.eligibility import EligibilityConfig
 from mlops_framework.governance.promotion import PromotionConfig
 from mlops_framework.lineage.manager import LineageManager
@@ -118,6 +120,11 @@ def _decisions(session) -> list[RetrainingDecision]:
 
 def _outcome_of(row: RetrainingDecision) -> str:
     return row.outcome.value if hasattr(row.outcome, "value") else str(row.outcome)
+
+
+def _recorded_by(row: RetrainingDecision) -> str:
+    v = row.recorded_by
+    return v.value if hasattr(v, "value") else str(v)
 
 
 # ---------------------------------------------------------------------- #
@@ -387,8 +394,16 @@ class TestProvenanceLinks:
 # ---------------------------------------------------------------------- #
 
 
+def _decisions_on(node, graph) -> list[dict]:
+    n = next((x for x in graph.nodes if x.id == node), None)
+    assert n is not None, f"{node} not in graph"
+    return n.attributes.get("retraining_decisions", [])
+
+
 class TestDecisionsInLineage:
-    def test_promoted_decision_links_dataset_run_and_model(self, workflow_env):
+    def test_promoted_decision_attaches_to_the_run_it_authorised(
+        self, workflow_env
+    ):
         session = workflow_env["db_session"]
         dv = _dataset_version(session)
         outcome = workflow_env["build"](approval_gate=AutoApproveGate()).run(
@@ -401,27 +416,29 @@ class TestDecisionsInLineage:
         graph = LineageManager(session).graph_for_model_version(
             outcome.model_version_id
         )
-        node_id = f"RetrainingDecision:{outcome.decision_id}"
-        assert any(n.id == node_id for n in graph.nodes)
-
-        edges = {(e.source, e.target, e.type) for e in graph.edges}
-        assert (f"DatasetVersion:{dv.id}", node_id, "evaluated_by") in edges
-        assert (
-            node_id,
-            f"TrainingRun:{outcome.training_run_id}",
-            "authorized",
-        ) in edges
-        # The link the artifact chain alone could never provide: why this
+        # No standalone node for the decision — see the module docstring
+        # on why. It shows up as one entry on the run it authorised.
+        assert not any(n.type == "RetrainingDecision" for n in graph.nodes)
+        run_node = f"TrainingRun:{outcome.training_run_id}"
+        entries = _decisions_on(run_node, graph)
+        assert len(entries) == 1
+        entry = entries[0]
+        assert entry["id"] == outcome.decision_id
+        assert entry["outcome"] == "PROMOTED"
+        # The fact the artifact chain alone could never provide: why this
         # model version was allowed into production.
-        assert (
-            node_id,
-            f"ModelVersion:{outcome.model_version_id}",
-            "promoted",
-        ) in edges
+        assert entry["model_version_id"] == outcome.model_version_id
+        # Nothing evaluated on the dataset version itself this time — the
+        # decision's home is the run, not both.
+        assert _decisions_on(f"DatasetVersion:{dv.id}", graph) == []
 
-    def test_blocked_decision_is_a_visible_dead_end(self, workflow_env):
+    def test_blocked_decision_falls_back_to_the_dataset_version(
+        self, workflow_env
+    ):
         """A refused retrain used to leave no lineage trace at all, and
-        was indistinguishable from a retrain nobody attempted."""
+        was indistinguishable from a retrain nobody attempted. Denied at
+        approval — before a training run ever exists — so the dataset
+        version is the only node close enough to attach it to."""
         session = workflow_env["db_session"]
         dv = _dataset_version(session)
         outcome = workflow_env["build"](approval_gate=DenyAllGate()).run(
@@ -430,24 +447,21 @@ class TestDecisionsInLineage:
             training_policy=TrainingPolicy(required_size=100),
             pipeline_id=SUCCESS_PIPELINE,
         )
+        assert outcome.training_run_id is None
         graph = LineageManager(session).graph_for_dataset_version(dv.id)
 
-        node_id = f"RetrainingDecision:{outcome.decision_id}"
-        node = next((n for n in graph.nodes if n.id == node_id), None)
-        assert node is not None
-        assert node.attributes["outcome"] == "BLOCKED"
-        assert node.attributes["blocked_at_step"] == "approval"
-        assert node.attributes["approved"] is False
-        assert "blocked at approval" in node.label
+        entries = _decisions_on(f"DatasetVersion:{dv.id}", graph)
+        assert len(entries) == 1
+        entry = entries[0]
+        assert entry["id"] == outcome.decision_id
+        assert entry["outcome"] == "BLOCKED"
+        assert entry["blocked_at_step"] == "approval"
+        assert entry["approved"] is False
+        assert "blocked at approval" in entry["label"]
 
-        incoming = [e for e in graph.edges if e.target == node_id]
-        outgoing = [e for e in graph.edges if e.source == node_id]
-        assert [e.type for e in incoming] == ["evaluated_by"]
-        assert outgoing == []
-
-    def test_rejected_model_is_not_labelled_promoted(self, workflow_env):
+    def test_rejected_model_records_the_right_outcome(self, workflow_env):
         """A model the promotion policy rejected still has a model
-        version; the edge to it must not claim it was promoted."""
+        version; the attached decision must not claim it was promoted."""
         session = workflow_env["db_session"]
         dv = _dataset_version(session)
         outcome = workflow_env["build"]().run(
@@ -462,24 +476,20 @@ class TestDecisionsInLineage:
         assert outcome.model_version_id is not None
 
         graph = LineageManager(session).graph_for_dataset_version(dv.id)
-        node_id = f"RetrainingDecision:{outcome.decision_id}"
-        edges = {(e.source, e.target, e.type) for e in graph.edges}
-        assert (
-            node_id,
-            f"ModelVersion:{outcome.model_version_id}",
-            "rejected",
-        ) in edges
-        assert (
-            node_id,
-            f"ModelVersion:{outcome.model_version_id}",
-            "promoted",
-        ) not in edges
+        run_node = f"TrainingRun:{outcome.training_run_id}"
+        entries = _decisions_on(run_node, graph)
+        assert len(entries) == 1
+        assert entries[0]["outcome"] == "BLOCKED"
+        assert entries[0]["model_version_id"] == outcome.model_version_id
 
     def test_every_attempt_on_a_version_appears_side_by_side(
         self, workflow_env
     ):
-        """Two attempts, one refused and one promoted, both visible on
-        the same dataset version — the history, not just the survivor."""
+        """Two attempts, one refused before training and one promoted,
+        both visible on the same dataset version's family — the history,
+        not just the survivor. Each lands on a different node (the
+        refusal has no run to attach to; the promotion does), so neither
+        overwrites the other."""
         session = workflow_env["db_session"]
         dv = _dataset_version(session)
         model = _model(session)
@@ -497,6 +507,144 @@ class TestDecisionsInLineage:
             promotion_config=PromotionConfig(min_metrics={"f1": 0.1}),
         )
         graph = LineageManager(session).graph_for_dataset_version(dv.id)
-        ids = {n.id for n in graph.nodes}
-        assert f"RetrainingDecision:{refused.decision_id}" in ids
-        assert f"RetrainingDecision:{promoted.decision_id}" in ids
+        dv_ids = {e["id"] for e in _decisions_on(f"DatasetVersion:{dv.id}", graph)}
+        run_ids = {
+            e["id"]
+            for e in _decisions_on(
+                f"TrainingRun:{promoted.training_run_id}", graph
+            )
+        }
+        assert refused.decision_id in dv_ids
+        assert promoted.decision_id in run_ids
+
+
+# ---------------------------------------------------------------------- #
+# Refusals taken before the workflow was ever called
+# ---------------------------------------------------------------------- #
+
+
+class TestCallerRecordedRefusal:
+    """The gap the closed-loop demo exposed.
+
+    The demo must ask the human before building dataset V2, so a denial
+    ends the run without ``RetrainingWorkflow.run()`` being reached — and
+    the most convincing refusal in the system reached the database only
+    as an ``AuditLog`` row, invisible to the table that counts refusals.
+    """
+
+    def test_refusal_lands_in_the_same_table(self, workflow_env):
+        session = workflow_env["db_session"]
+        dv = _dataset_version(session)
+        model = _model(session)
+
+        RetrainingDecisionStore(session).record_refusal(
+            dataset_version_id=dv.id,
+            model_id=model.id,
+            responder="alice@example.com",
+            reason="traffic shift is seasonal, not a real regression",
+        )
+
+        rows = _decisions(session)
+        assert len(rows) == 1
+        row = rows[0]
+        assert _outcome_of(row) == RetrainingOutcomeStatus.BLOCKED.value
+        assert row.blocked_at_step == "approval"
+        assert row.blocked_reason == "approval_denied"
+        assert row.approved is False
+        assert row.approval_responder == "alice@example.com"
+
+    def test_refusal_is_distinguishable_from_a_workflow_verdict(
+        self, workflow_env
+    ):
+        """Both are real governance decisions; they are not the same fact.
+
+        A row that could not say which it was would make the table's own
+        provenance weaker than the provenance it records.
+        """
+        session = workflow_env["db_session"]
+        dv = _dataset_version(session)
+        model = _model(session)
+
+        # One refused inside the workflow, by its own approval gate.
+        workflow_env["build"](approval_gate=DenyAllGate()).run(
+            dataset_version=dv,
+            model=model,
+            training_policy=TrainingPolicy(required_size=100),
+            pipeline_id=SUCCESS_PIPELINE,
+        )
+        # One refused before the workflow was ever entered.
+        RetrainingDecisionStore(session).record_refusal(
+            dataset_version_id=dv.id,
+            model_id=model.id,
+            responder="alice@example.com",
+            reason="not now",
+        )
+
+        by_source = {
+            _recorded_by(r): r for r in _decisions(session)
+        }
+        assert set(by_source) == {
+            DecisionRecordedBy.WORKFLOW.value,
+            DecisionRecordedBy.CALLER.value,
+        }
+        # Both stopped at the same gate and both say no...
+        assert all(r.blocked_at_step == "approval" for r in by_source.values())
+        assert all(r.approved is False for r in by_source.values())
+        # ...but only the workflow one actually ran the earlier gates.
+        assert by_source[DecisionRecordedBy.WORKFLOW.value].eligible is True
+        assert by_source[DecisionRecordedBy.CALLER.value].eligible is None
+        assert (
+            by_source[DecisionRecordedBy.WORKFLOW.value].readiness_evaluation_id
+            is not None
+        )
+        assert (
+            by_source[DecisionRecordedBy.CALLER.value].readiness_evaluation_id
+            is None
+        )
+
+    def test_refusal_authorises_nothing(self, workflow_env):
+        session = workflow_env["db_session"]
+        dv = _dataset_version(session)
+        RetrainingDecisionStore(session).record_refusal(
+            dataset_version_id=dv.id,
+            model_id=_model(session).id,
+            responder="alice@example.com",
+            reason="not now",
+        )
+        row = _decisions(session)[0]
+        assert row.training_run_id is None
+        assert row.model_version_id is None
+        assert row.promotion_event_id is None
+
+    def test_refusal_renders_as_a_dead_end_in_lineage(self, workflow_env):
+        """The whole reason the row is worth writing — attached to the
+        dataset version, since a caller-recorded refusal never reaches a
+        training run either."""
+        session = workflow_env["db_session"]
+        dv = _dataset_version(session)
+        row = RetrainingDecisionStore(session).record_refusal(
+            dataset_version_id=dv.id,
+            model_id=_model(session).id,
+            responder="alice@example.com",
+            reason="seasonal, not a regression",
+        )
+
+        graph = LineageManager(session).graph_for_dataset_version(dv.id)
+        entries = _decisions_on(f"DatasetVersion:{dv.id}", graph)
+        assert len(entries) == 1
+        assert entries[0]["id"] == row.id
+        assert entries[0]["blocked_at_step"] == "approval"
+
+    def test_workflow_rows_are_marked_as_such(self, workflow_env):
+        session = workflow_env["db_session"]
+        workflow_env["build"]().run(
+            dataset_version=_dataset_version(session),
+            model=_model(session),
+            training_policy=TrainingPolicy(required_size=100),
+            pipeline_id=SUCCESS_PIPELINE,
+            promotion_config=PromotionConfig(min_metrics={"f1": 0.1}),
+        )
+        assert (
+            _recorded_by(_decisions(session)[0])
+            == DecisionRecordedBy.WORKFLOW.value
+        )

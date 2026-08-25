@@ -1247,7 +1247,6 @@ details[open] > summary:before { transform: rotate(90deg); }
  * label since (see LineageManager's module docstring), so only four
  * lineage types remain. */
 .lineage-node.DatasetVersion { border-left: 3px solid var(--run); }
-.lineage-node.RetrainingDecision { border-left: 3px solid var(--series-7); }
 .lineage-node.TrainingRun { border-left: 3px solid var(--warn); }
 .lineage-node.ModelVersion { border-left: 3px solid var(--violet); }
 .lineage-node.ServingInstance { border-left: 3px solid var(--ok); }
@@ -1355,7 +1354,6 @@ details[open] > summary:before { transform: rotate(90deg); }
  * third class rather than relying on this block staying below them in
  * the file. */
 .lineage-graph .lineage-node.DatasetVersion,
-.lineage-graph .lineage-node.RetrainingDecision,
 .lineage-graph .lineage-node.TrainingRun,
 .lineage-graph .lineage-node.ModelVersion,
 .lineage-graph .lineage-node.ServingInstance {
@@ -1369,11 +1367,13 @@ details[open] > summary:before { transform: rotate(90deg); }
   white-space: nowrap;
 }
 /* .badge is nowrap by design (app.css §7) — right for a short fixed
- * vocabulary like SUCCESS/FAILED/CANDIDATE, wrong for
- * RetrainingDecision's badge, whose text is a live blocked_at_step name
- * ("blocked: promotion") with no length ceiling. Unconstrained, that
- * text ignored the 208px node width entirely and ran past the card's
- * own border into the canvas behind it. max-width caps the badge to
+ * vocabulary like SUCCESS/FAILED/CANDIDATE, wrong for a badge whose
+ * text is a live string with no length ceiling (this used to be a
+ * RetrainingDecision node's own badge, "blocked: promotion" — same
+ * problem now for anything long inside a node's .meta line).
+ * Unconstrained, that text ignored the 208px node width entirely and
+ * ran past the card's own border into the canvas behind it. max-width
+ * caps the badge to
  * whatever room .meta actually has (the icon chip + gap already
  * narrowed that, same box .label truncates into above); the ellipsis
  * itself lives on .badge-text, not .badge — .badge is
@@ -1395,6 +1395,25 @@ details[open] > summary:before { transform: rotate(90deg); }
 .lineage-graph .lineage-node.root {
   border-color: var(--accent-border);
   box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* A node's own status badge (TrainingRun/ModelVersion/ServingInstance)
+ * and its decision chip (lineageNodeMeta) are two independent facts —
+ * this row is what lets both actually sit on the meta line together
+ * instead of one silently replacing the other. Wraps rather than
+ * overflowing: a 208px node is narrow enough that two badges plus a
+ * multi-decision count can genuinely need two lines. */
+.lineage-graph .lineage-node .meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.lineage-graph .lineage-node .decision-chip {
+  cursor: pointer;
+}
+.lineage-graph .lineage-node .decision-chip:hover {
+  filter: brightness(0.92);
 }
 
 /* Nodes that resolve to a real detail page render as an <a> rather than
@@ -1515,6 +1534,54 @@ details[open] > summary:before { transform: rotate(90deg); }
 .tree-cell.pending  { background: var(--warn); }
 .tree-cell.cancelled{ background: var(--idle); opacity: .5; }
 .tree-cell-link { display: inline-flex; }
+
+/* Retraining decision detail (Lineage's decision-chip click target) —
+ * the app's only modal, so nothing existing to reuse; same backdrop
+ * treatment as .nav-scrim (§2), a plain centred card rather than a new
+ * pattern. */
+.lineage-decision-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 7, 22, .45);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.lineage-decision-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  width: min(480px, 100%);
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 20px;
+}
+.lineage-decision-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.lineage-decision-modal-head h3 { margin: 0; }
+.lineage-decision-modal-head button {
+  font-size: 18px;
+  line-height: 1;
+  padding: 4px 10px;
+}
+.lineage-decision-card + .lineage-decision-card {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.lineage-decision-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
 
 /* ================================================================== */
 /* 13. Misc                                                            */

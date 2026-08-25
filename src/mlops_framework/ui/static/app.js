@@ -2957,27 +2957,22 @@ async function renderLineagePicker(out) {
 // TrainingRun landed in different columns despite being the exact same
 // *kind* of thing, which read as misaligned rather than as two
 // branches of one story. Same type, same column, fixes that outright.
+// RetrainingDecision used to be a node type here — its own column,
+// then several rounds of separating its edges' attachment points from
+// the dataset's own (dedicated hubs, obstruction detours, wire hops)
+// once sharing a column made it a tangle. None of it made the decision
+// look like part of the same lineage chain, because it never was one:
+// a governance verdict about a node, not a fact that produced or
+// consumed one. It's gone as a node entirely now — see
+// lineage/manager.py's docstring on why — and shows up instead as a
+// status chip in the meta line of whichever node it actually reached
+// (lineageNodeMeta), so the graph only has the four kinds of node that
+// were ever real lineage facts.
 const LINEAGE_TYPE_COLUMN = {
   DatasetVersion: 0,
-  // Its own column, where it sits causally, between the data it
-  // evaluated and the run it did or didn't authorise. A prior version
-  // of this graph folded it into the dataset column instead — measured
-  // as fewer column-skipping trained_with edges and less total edge
-  // length on the demo's own graph — but it meant every one of a
-  // decision's edges (an incoming evaluated_by *and* an outgoing
-  // authorized/promoted/rejected) shared a lane with the dataset's own
-  // edges. Two rounds of separating those edges' attachment points
-  // (see lineageEdgeGeometry) made the direction of each individually
-  // readable; it never stopped looking like a tangle at a glance, which
-  // is the thing a lineage graph actually has to be. A trained_with
-  // edge skipping over this column now draws exactly like any other
-  // multi-column hop elsewhere in this graph — a shape already legible
-  // everywhere else it appears — rather than the bespoke same-lane bow
-  // this column used to force just for evaluated_by.
-  RetrainingDecision: 1,
-  TrainingRun: 2,
-  ModelVersion: 3,
-  ServingInstance: 4,
+  TrainingRun: 1,
+  ModelVersion: 2,
+  ServingInstance: 3,
 };
 
 function lineageLevels(nodes, edges) {
@@ -2992,9 +2987,9 @@ function lineageLevels(nodes, edges) {
     (columns[col] || (columns[col] = [])).push(n.id);
   }
   // Compact away unoccupied columns before returning. Assigning by type
-  // index leaves *holes* whenever a type is absent — a graph with no
-  // RetrainingDecision (every graph, until the first governed retrain
-  // runs) leaves index 1 empty — and a sparse array breaks the caller
+  // index leaves *holes* whenever a type is absent — a graph with a
+  // run that hasn't produced a ModelVersion yet leaves index 2 empty —
+  // and a sparse array breaks the caller
   // two ways at once: it lays nodes out at `PAD + ci * COL_W` using the
   // raw index, so the gap either side of the missing column is drawn
   // twice as wide as a real one; and `Math.max(1, ...cols.map(c =>
@@ -3048,19 +3043,6 @@ function orderByBarycentre(columns, edges) {
   for (const e of edges) {
     const cs = colOf.get(e.source), ct = colOf.get(e.target);
     if (cs === undefined || ct === undefined || cs === ct) continue;
-    // RetrainingDecision reads as an annotation *on* the dataset/model it
-    // touches (see LINEAGE_TYPE_COLUMN's own comment on why it gets a
-    // column at all), never a second lineage branch — but averaged in as
-    // a source unconditionally, it still acted like one: TrainingRun:5
-    // is both trained_with a DatasetVersion *and* authorized by a
-    // RetrainingDecision, and the decision's own row (it's alone in its
-    // column, so always row 0) pulled run 5's average up and out of its
-    // dataset version's block — the same "runs out of order" bug this
-    // whole rewrite exists to fix, just from a source this function
-    // didn't know to discount. A node's real grouping question is
-    // always "which dataset/run/model produced it," which a governance
-    // verdict about that same node never changes.
-    if (e.source.startsWith("RetrainingDecision:")) continue;
     (sources.get(e.target) || sources.set(e.target, []).get(e.target)).push(e.source);
   }
 
@@ -3089,37 +3071,93 @@ function orderByBarycentre(columns, edges) {
 // most about that specific node without opening it — a status badge for
 // the things that carry framework state (TrainingRun, ModelVersion,
 // ServingInstance), a plain count for DatasetVersion, nothing for the
-// identity-only nodes (Dataset, Model) whose label already says it all.
+// identity-only nodes (Dataset, Model) whose label already says it all
+// — plus, on top of whichever of those applies, a decision chip for any
+// node a RetrainingDecision actually reached (see
+// LineageManager._expand_decisions): the run it authorised, or the
+// dataset version itself when it blocked before a run ever existed.
+// Two independent facts about the same card, so both render rather
+// than one replacing the other.
 function lineageNodeMeta(n) {
   const a = n.attributes || {};
-  if (n.type === "RetrainingDecision") {
-    // The outcome alone under-reports a refusal: "BLOCKED" without the
-    // gate that blocked it is the least useful thing this card could
-    // say, since the whole point of drawing the node is to show where
-    // the chain stopped.
-    const label = a.blocked_at_step ? `blocked: ${a.blocked_at_step}` : a.outcome;
-    // .badge is `display: inline-flex` (the dot + text are flex items),
-    // and text-overflow doesn't reliably ellipsis a flex item's
-    // overflowing content the way it does plain inline text — it just
-    // hard-clips mid-word with no "…" cue. Wrapping the text alone in
-    // its own span gives *that* box the ordinary block/inline-block
-    // overflow context ellipsis actually needs; the CSS lives in
-    // app.css next to the .meta .badge rule this is scoped under.
-    // `title` puts the untruncated string back one hover away — the
-    // ellipsis above trims what's shown, not what's known.
-    return el("span", { class: `badge ${statusKind(a.outcome)}`, title: String(label || "—") },
-      el("span", { class: "badge-text" }, String(label || "—")));
-  }
-  if (n.type === "TrainingRun" && a.status) return statusBadge(a.status);
-  if (n.type === "ModelVersion" && a.state) return statusBadge(a.state);
+  const parts = [];
+  if (n.type === "TrainingRun" && a.status) parts.push(statusBadge(a.status));
+  if (n.type === "ModelVersion" && a.state) parts.push(statusBadge(a.state));
   if (n.type === "ServingInstance") {
-    return el("span", { class: `badge ${a.is_active ? "success" : "cancelled"}` },
-      a.is_active ? "active" : "inactive");
+    parts.push(el("span", { class: `badge ${a.is_active ? "success" : "cancelled"}` },
+      a.is_active ? "active" : "inactive"));
   }
   if (n.type === "DatasetVersion" && a.row_count != null) {
-    return el("span", { class: "faint" }, `${fmt.num(a.row_count)} rows`);
+    parts.push(el("span", { class: "faint" }, `${fmt.num(a.row_count)} rows`));
   }
-  return null;
+  if (a.retraining_decisions && a.retraining_decisions.length) {
+    parts.push(decisionChip(a.retraining_decisions));
+  }
+  if (!parts.length) return null;
+  return parts.length === 1 ? parts[0] : el("div", { class: "meta-row" }, ...parts);
+}
+
+// The chip itself: "blocked"/"passed" rather than the raw PROMOTED/
+// BLOCKED enum — this is a glance-level signal, not the detail view.
+// Click opens that detail (showDecisionDetail) rather than following
+// whatever link the card itself has — stopPropagation/preventDefault
+// keep a click here from also activating the node's own <a> underneath
+// it (lineageNodeHref makes most node types real links).
+function decisionChip(decisions) {
+  const latest = decisions[decisions.length - 1];
+  const blocked = latest.outcome === "BLOCKED";
+  const text = (blocked ? "blocked" : "passed") + (decisions.length > 1 ? ` ×${decisions.length}` : "");
+  const chip = el("span", {
+    class: `badge ${blocked ? "failed" : "success"} decision-chip`,
+    title: "Retraining decision — click for detail",
+  }, el("span", { class: "badge-text" }, text));
+  chip.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    showDecisionDetail(decisions);
+  });
+  return chip;
+}
+
+// A minimal overlay — this app has no other modal, so no shared
+// component to reuse — closed by the backdrop, Escape, or the header's
+// own close button. Appended to <body>, well outside the lineage
+// graph's own pan/zoom transform, so nothing here has to account for
+// the canvas's current scale or scroll position.
+function showDecisionDetail(decisions) {
+  const close = () => { backdrop.remove(); document.removeEventListener("keydown", onKey); };
+  const onKey = (ev) => { if (ev.key === "Escape") close(); };
+  document.addEventListener("keydown", onKey);
+
+  const cards = decisions.map((d) => el("div", { class: "lineage-decision-card" },
+    el("div", { class: "lineage-decision-card-head" },
+      el("span", { class: `badge ${statusKind(d.outcome)}` }, d.outcome),
+      el("span", { class: "faint" }, `decision #${d.id}`)),
+    el("dl", { class: "kv" },
+      el("dt", {}, "Result"), el("dd", {}, d.label),
+      ...(d.blocked_reason ? [el("dt", {}, "Reason"), el("dd", {}, d.blocked_reason)] : []),
+      el("dt", {}, "Eligible"), el("dd", {}, d.eligible ? "yes" : "no"),
+      el("dt", {}, "Approved"),
+      el("dd", {}, d.approved == null ? "—" : d.approved ? "yes" : "no"),
+      ...(d.approval_responder
+        ? [el("dt", {}, "Responder"), el("dd", {}, d.approval_responder)] : []),
+      ...(d.training_run_id
+        ? [el("dt", {}, "Training run"),
+           el("dd", {}, el("a", { href: `/runs/${d.training_run_id}` }, `#${d.training_run_id}`))]
+        : []),
+      ...(d.model_version_id
+        ? [el("dt", {}, "Model version"), el("dd", {}, `#${d.model_version_id}`)] : []))));
+
+  const backdrop = el("div", {
+    class: "lineage-decision-backdrop",
+    onclick: (ev) => { if (ev.target === backdrop) close(); },
+  },
+    el("div", { class: "lineage-decision-modal" },
+      el("div", { class: "lineage-decision-modal-head" },
+        el("h3", {}, "Retraining decision"),
+        el("button", { class: "btn", "aria-label": "Close", onclick: close }, "×")),
+      ...cards));
+  document.body.appendChild(backdrop);
 }
 
 // Where clicking a node actually goes — its owning entity's own detail
@@ -3157,14 +3195,14 @@ function lineageNodeHref(n, byId, edges) {
 // scannable. Every lookup here is total (an unknown type falls through
 // to "task"/grey) so a graph never renders a blank icon.
 //
-// Only four types now: a dataset's/model's name lives inside its own
+// Only four types: a dataset's/model's name lives inside its own
 // version node's label (see LineageManager's module docstring on why
 // the separate Dataset/Model identity nodes were folded away), so
-// there's no longer a second, un-versioned node per family to give its
-// own icon or colour.
+// there's no second, un-versioned node per family to give its own icon
+// or colour — and RetrainingDecision is a chip on a node's meta line
+// now (lineageNodeMeta), not a node of its own, so it needs neither.
 const LINEAGE_FAMILY = {
   DatasetVersion: "dataset",
-  RetrainingDecision: "governance",
   TrainingRun: "task",
   ModelVersion: "model",
   ServingInstance: "serving",
@@ -3173,8 +3211,6 @@ const LINEAGE_FAMILY = {
 // Minimal stroke icons (feather/lucide-style paths, currentColor).
 const LINEAGE_ICON_PATHS = {
   DatasetVersion: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/>',
-  // A shield: the gate, not the thing that passed through it.
-  RetrainingDecision: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/>',
   TrainingRun: '<polyline points="3 12 8 12 10 18 14 6 16 12 21 12"/>',
   ModelVersion: '<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><line x1="12" y1="13" x2="12" y2="21"/>',
   ServingInstance: '<rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><line x1="6" y1="6.5" x2="6.01" y2="6.5"/><line x1="6" y1="17.5" x2="6.01" y2="17.5"/>',
@@ -3212,20 +3248,21 @@ function lineageIcon(type, small) {
 // - Adjacent columns (the common case): out the source's right edge,
 //   one vertical jog at the horizontal midpoint, into the target's
 //   left edge.
-// - A skip edge (more than one column apart — every trained_with edge,
-//   now that RetrainingDecision sits between DatasetVersion and
-//   TrainingRun) whose straight path would run through a node sitting
-//   in a column in between: the same shape with an extra horizontal
-//   leg at a row clear of that node — above or below it, whichever
-//   side is already closer to this edge's own path, so the detour
-//   stays small rather than every such edge routing to the same side
-//   regardless of where it was headed.
+// - A skip edge (more than one column apart — no current edge type
+//   produces one now that RetrainingDecision is a chip rather than a
+//   node in between DatasetVersion and TrainingRun, but the shape stays
+//   correct for the day a future node type sits between two others
+//   again) whose straight path would run through a node sitting in a
+//   column in between: the same shape with an extra horizontal leg at
+//   a row clear of that node — above or below it, whichever side is
+//   already closer to this edge's own path, so the detour stays small
+//   rather than every such edge routing to the same side regardless of
+//   where it was headed.
 // - Same column (`derived_from` between two dataset versions — the
-//   only edge left connecting two nodes of the same type, now that
-//   RetrainingDecision has its own column; see LINEAGE_TYPE_COLUMN): a
-//   same-rank edge has nowhere to the side to run through, so it exits
-//   and re-enters the node's own right edge — a loop out and back,
-//   square-cornered instead of a bow.
+//   only edge connecting two nodes of the same type): a same-rank edge
+//   has nowhere to the side to run through, so it exits and re-enters
+//   the node's own right edge — a loop out and back, square-cornered
+//   instead of a bow.
 function lineageEdgeGeometry(e, pos, colOf, NODE_W, NODE_H) {
   const from = pos.get(e.source), to = pos.get(e.target);
   if (colOf.get(e.source) === colOf.get(e.target)) {
@@ -3512,7 +3549,7 @@ function renderLineageGraph(nodes, edges, rootId) {
 // nodes themselves use so the legend is a real key and not a second
 // vocabulary to cross-reference.
 function renderLineageLegend(nodes) {
-  const order = ["DatasetVersion", "RetrainingDecision", "TrainingRun", "ModelVersion", "ServingInstance"];
+  const order = ["DatasetVersion", "TrainingRun", "ModelVersion", "ServingInstance"];
   const present = order.filter((t) => nodes.some((n) => n.type === t));
   return el("div", { class: "legend lineage-legend" },
     el("span", { class: "legend-label" }, "Legend"),

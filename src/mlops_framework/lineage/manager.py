@@ -39,31 +39,34 @@ Two arrows converging on the same node from overlapping sources read as
 noise, not as two facts — dropped, in favour of the one path that is
 actually true: a model version is trained *via* a run, never directly.
 
-Governance decisions are nodes too
------------------------------------
+Governance decisions are attributes, not nodes
+------------------------------------------------
 The chain above answers *what* produced an artifact. It cannot answer
 *why the artifact was allowed to exist* — and for a framework whose
 whole claim is governed retraining, that was the more important of the
 two questions to leave unanswered. A ``RetrainingDecision`` (migration
 012) is one execution of ``RetrainingWorkflow``: the readiness, drift,
-eligibility, approval and promotion verdicts taken as a unit. It enters
-the graph as a node hanging off the dataset version it judged, with
-``authorized``/``promoted``/``rejected`` edges to whatever it let
-happen.
+eligibility, approval and promotion verdicts taken as a unit.
 
-A decision that blocked has *no* outgoing edge, which is the point: it
-shows up as a visible dead end against the dataset version — "something
-was evaluated here and stopped" — where previously a refused retrain
-left no trace in lineage at all and was indistinguishable from a retrain
-nobody ever attempted.
+An earlier revision drew each one as its own node hanging off the
+dataset version it judged, with ``authorized``/``promoted``/``rejected``
+edges to whatever it let happen — a blocked decision rendered as a
+visible dead end, which was the point: "something was evaluated here
+and stopped," where previously a refused retrain left no trace in
+lineage at all. It did not survive contact with a real graph: a
+decision's own edges (an incoming ``evaluated_by`` *and* an outgoing
+``authorized``) sat in the same lane as the dataset version's other
+edges regardless of how many rounds of layout work tried to keep the
+two directions visually apart. A governance verdict about a node was
+never a second lineage branch for it.
 
-This does put two arrows into ModelVersion (``produced`` from the run,
-``promoted`` from the decision) — the shape the module dropped
-``trained_on`` for. It is not the same situation. ``trained_on`` stated
-the same fact as the two-hop path beneath it, just shorter; ``promoted``
-states a fact no path in the graph states: a run producing a model and a
-governance decision putting it into production are different events, and
-one can happen without the other.
+Each decision (:meth:`_expand_decisions`) is now a plain dict appended
+to a ``retraining_decisions`` list attribute on whichever existing node
+it actually reached: the run it authorized, when a run was created, or
+the dataset version itself when the decision blocked before one ever
+was. Nothing upstream of the chain changes shape to carry it — the
+console renders a status chip wherever the list is non-empty and shows
+the rest of the dict on demand.
 
 Whole-family view
 ------------------
@@ -442,73 +445,55 @@ class LineageManager:
     def _expand_decisions(
         self, graph: LineageGraph, dv: DatasetVersion
     ) -> None:
-        """Add every governed retraining attempt made on this version.
+        """Attach every governed retraining attempt made on this version
+        to whichever existing node it actually reached.
 
-        One node per attempt, not per gate. Five nodes for one workflow
-        run would say five times over what the run already says once —
-        and would put the blocked case at a disadvantage in the drawing,
-        since a refusal at readiness would render as a single lonely
-        node while an approval rendered as a chain. The verdicts live in
-        the node's attributes instead, where the console can show them
-        without the graph growing a node type per policy.
+        A dedicated ``RetrainingDecision`` node (one per attempt, not per
+        gate — see git history) drew a real dead end for a blocked
+        attempt, but a decision's own edges (an incoming ``evaluated_by``
+        *and* an outgoing ``authorized``/``promoted``/``rejected``) sat in
+        the same lane as the dataset version's other edges regardless —
+        every fix to keep those two directions visually apart (separate
+        hubs, a dedicated column, obstruction detours, wire hops) still
+        left it reading as a tangle at a glance, on the live graph, not
+        just in theory. A governance verdict about a node was never a
+        second lineage branch for it, which is exactly why row-ordering
+        excludes it as a grouping source elsewhere in this file — this
+        drops it as a *node* for the same reason.
+        Instead: each decision becomes one entry in a
+        ``retraining_decisions`` list attribute, attached to the run it
+        authorized when one exists (the console shows a status chip
+        there — "the path that actually retrained"), or to this dataset
+        version when it doesn't (blocked before a run was ever created —
+        still the one existing node close enough to say "something was
+        evaluated here and stopped").
         """
         for d in self._decisions_for(dv.id):
-            node_id = f"RetrainingDecision:{d.id}"
-            self._add_node(
-                graph,
-                LineageNode(
-                    id=node_id,
-                    type="RetrainingDecision",
-                    label=f"decision {d.id} — {_outcome_label(d)}",
-                    attributes={
-                        "outcome": _enum_value(d.outcome),
-                        "blocked_at_step": d.blocked_at_step,
-                        "blocked_reason": d.blocked_reason,
-                        "eligible": d.eligible,
-                        "approved": d.approved,
-                        "approval_responder": d.approval_responder,
-                        "readiness_evaluation_id": d.readiness_evaluation_id,
-                        "drift_evaluation_id": d.drift_evaluation_id,
-                    },
-                ),
+            info = {
+                "id": d.id,
+                "outcome": _enum_value(d.outcome),
+                "label": _outcome_label(d),
+                "blocked_at_step": d.blocked_at_step,
+                "blocked_reason": d.blocked_reason,
+                "eligible": d.eligible,
+                "approved": d.approved,
+                "approval_responder": d.approval_responder,
+                "readiness_evaluation_id": d.readiness_evaluation_id,
+                "drift_evaluation_id": d.drift_evaluation_id,
+                "training_run_id": d.training_run_id,
+                "model_version_id": d.model_version_id,
+            }
+            run_node_id = (
+                f"TrainingRun:{d.training_run_id}"
+                if d.training_run_id is not None
+                else None
             )
-            self._add_edge(
-                graph,
-                LineageEdge(
-                    source=f"DatasetVersion:{dv.id}",
-                    target=node_id,
-                    type="evaluated_by",
-                ),
+            anchor_id = (
+                run_node_id
+                if run_node_id is not None and self._has_node(graph, run_node_id)
+                else f"DatasetVersion:{dv.id}"
             )
-            if d.training_run_id is not None and self._has_node(
-                graph, f"TrainingRun:{d.training_run_id}"
-            ):
-                self._add_edge(
-                    graph,
-                    LineageEdge(
-                        source=node_id,
-                        target=f"TrainingRun:{d.training_run_id}",
-                        type="authorized",
-                    ),
-                )
-            if d.model_version_id is not None and self._has_node(
-                graph, f"ModelVersion:{d.model_version_id}"
-            ):
-                # A blocked decision can still name a model version: the
-                # promotion policy rejected a model that had already been
-                # trained. Recording that as "promoted" would invert what
-                # happened, so the two verdicts get two edge types.
-                promoted = (
-                    _enum_value(d.outcome) == RetrainingOutcomeStatus.PROMOTED.value
-                )
-                self._add_edge(
-                    graph,
-                    LineageEdge(
-                        source=node_id,
-                        target=f"ModelVersion:{d.model_version_id}",
-                        type="promoted" if promoted else "rejected",
-                    ),
-                )
+            self._attach_decision(graph, anchor_id, info)
 
     def _expand_serving_instance(
         self, graph: LineageGraph, si: ServingInstance
@@ -634,6 +619,25 @@ class LineageManager:
     @staticmethod
     def _has_node(graph: LineageGraph, node_id: str) -> bool:
         return any(n.id == node_id for n in graph.nodes)
+
+    @staticmethod
+    def _attach_decision(
+        graph: LineageGraph, node_id: str, info: dict[str, Any]
+    ) -> None:
+        """Append one decision's info to an existing node's attributes.
+
+        A list, not a single value: a dataset version can be evaluated
+        more than once (a refusal, then a later retry), and a run can in
+        principle be named by more than one decision's own bookkeeping
+        even though only one ever authorized it. Called only with a
+        ``node_id`` already in the graph — ``_expand_decisions`` checks
+        ``_has_node`` before picking a run as the anchor, and the dataset
+        version fallback is always added before this runs.
+        """
+        for node in graph.nodes:
+            if node.id == node_id:
+                node.attributes.setdefault("retraining_decisions", []).append(info)
+                return
 
 
 # ---------------------------------------------------------------------- #
