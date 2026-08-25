@@ -3378,6 +3378,58 @@ function lineageEdgeGeometry(e, pos, colOf, NODE_W, NODE_H, laneOf) {
   return { points: [[x1, y1], [midX, y1], [midX, y2], [x2, y2]] };
 }
 
+// Centring each column independently around the canvas middle put every
+// DatasetVersion at a row picked purely by how many DatasetVersions
+// there are, with no regard for where its own training runs actually
+// sit — two versions one row apart, each fanning out to a block of runs
+// several rows tall, put both blocks' vertical spans right on top of
+// each other, so a run trained on v2 and a run trained on v1 read as
+// coming off the same trunk (confirmed against the live graph: the
+// per-source bend lanes above kept the *lines* from literally
+// overlapping, but the two dataset versions still sat close enough
+// together that their fan-outs reached into each other's territory).
+// Realigning every column, working outward from whichever one has the
+// most rows (already a clean one-per-row grid with nothing to align it
+// *to*), so every sparser column instead sits at the average row of the
+// neighbours it's actually connected to — with a minimum row gap
+// enforced within each column so that average can never put two of a
+// column's own members on top of each other — means a dataset version
+// with many runs pushes the next one down to clear that whole block,
+// the same way a hand-drawn diagram leaves room rather than squeezing
+// both onto adjacent lines. Order within each column (which row is
+// first) is left untouched — that's orderByBarycentre's job, already
+// fixed once against a real regression — this only ever slides a
+// column's own rows apart along y, never past each other.
+function alignColumnsToNeighbours(levels, edges, colOf, pos, ROW_H) {
+  if (levels.length < 2) return;
+  let anchorCi = 0;
+  for (let ci = 1; ci < levels.length; ci++) {
+    if (levels[ci].length > levels[anchorCi].length) anchorCi = ci;
+  }
+  const neighbourYs = (id, adjCi) => {
+    const ys = [];
+    for (const e of edges) {
+      if (e.source === id && colOf.get(e.target) === adjCi) ys.push(pos.get(e.target).y);
+      else if (e.target === id && colOf.get(e.source) === adjCi) ys.push(pos.get(e.source).y);
+    }
+    return ys;
+  };
+  const settle = (col, adjCi) => {
+    const desired = col.map((id) => {
+      const ys = neighbourYs(id, adjCi);
+      return ys.length ? ys.reduce((a, b) => a + b, 0) / ys.length : pos.get(id).y;
+    });
+    let prevY = -Infinity;
+    col.forEach((id, i) => {
+      const y = Math.max(desired[i], prevY + ROW_H);
+      pos.get(id).y = y;
+      prevY = y;
+    });
+  };
+  for (let ci = anchorCi - 1; ci >= 0; ci--) settle(levels[ci], ci + 1);
+  for (let ci = anchorCi + 1; ci < levels.length; ci++) settle(levels[ci], ci - 1);
+}
+
 // The node-link graph itself: positions come straight from
 // (column, row) on a fixed grid via lineageLevels(), same approach as
 // renderDagGraph, with one SVG overlay drawing an arrowed, labelled
@@ -3415,7 +3467,17 @@ function renderLineageGraph(nodes, edges, rootId) {
     });
   });
   const width = PAD * 2 + Math.max(0, levels.length - 1) * COL_W + NODE_W;
-  const height = PAD * 2 + (maxRows - 1) * ROW_H + NODE_H;
+  const validEdges = edges.filter((e) => pos.has(e.source) && pos.has(e.target));
+  alignColumnsToNeighbours(levels, validEdges, colOf, pos, ROW_H);
+  // Height comes from the settled positions, not the original maxRows
+  // formula — alignColumnsToNeighbours can push a sparse column's rows
+  // further apart than the uniform grid did (a lone node with no
+  // neighbours to align to, sitting after a tall block that pushed the
+  // minimum gap past where the plain grid would have put it), so the
+  // canvas has to measure what actually got drawn rather than assume it
+  // still matches the pre-alignment layout.
+  const maxY = Math.max(PAD + (maxRows - 1) * ROW_H, ...[...pos.values()].map((p) => p.y));
+  const height = maxY + NODE_H + PAD;
 
   const svg = svgEl("svg", {
     style: `position:absolute;inset:0;width:${width}px;height:${height}px`,
@@ -3427,7 +3489,6 @@ function renderLineageGraph(nodes, edges, rootId) {
         markerWidth: "7", markerHeight: "7", orient: "auto-start-reverse",
       }, svgEl("path", { d: "M0,0 L8,4 L0,8 z", class: "lineage-edge-arrow" }))));
 
-  const validEdges = edges.filter((e) => pos.has(e.source) && pos.has(e.target));
   const laneOf = computeSourceLanes(validEdges, colOf, pos);
   const geoms = validEdges.map((e) => lineageEdgeGeometry(e, pos, colOf, NODE_W, NODE_H, laneOf));
 
