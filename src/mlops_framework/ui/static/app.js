@@ -2214,7 +2214,16 @@ async function initModelDetail(id) {
     // surfaces right here, inline, via the "MLflow disagrees" badge —
     // that is the one case worth interrupting this table for.
     function renderVersionsTable(byVersionId) {
-      const table = el("table", {},
+      // This table gets wide fast — every metric column plus Run,
+      // Dataset, Created, Report, and the roll-back action — and on
+      // anything narrower than a laptop it overflows and has to scroll.
+      // Scrolled to reach Report or Roll back, a plain table takes
+      // Version and State with it, so a row on a phone screen reads as
+      // just "report / Roll back" with nothing saying which version
+      // that even is (reported as the page looking broken, not merely
+      // scrolled). Freezing the Version column keeps that one anchor
+      // in view no matter how far right the rest of the row scrolls.
+      const table = el("table", { class: "sticky-col-1" },
         el("thead", {}, el("tr", {},
           el("th", {}, "Version"), el("th", {}, "State"),
           ...metricKeys.map((k) => el("th", {}, k)),

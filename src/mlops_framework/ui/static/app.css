@@ -821,6 +821,27 @@ th.num { text-align: right; }
 
 .empty { padding: 44px 16px; text-align: center; color: var(--text-muted); }
 
+/* Frozen leading column for a table wide enough to need .table-wrap's
+ * horizontal scroll (the model Versions table, most often — every
+ * metric plus Run/Dataset/Created/Report/Roll back overflows well
+ * before a phone-width viewport). td/th backgrounds are transparent by
+ * default, showing the surface colour underneath straight through — a
+ * sticky cell needs its own opaque background or the columns scrolling
+ * past behind it would show through instead of being covered. thead's
+ * own background rule already colours its first cell; body cells get
+ * one here, plus the hover rule so a hovered row's frozen cell darkens
+ * along with the rest of it instead of sitting there looking unhovered. */
+.sticky-col-1 th:first-child,
+.sticky-col-1 td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+  box-shadow: 1px 0 0 var(--border);
+}
+.sticky-col-1 thead th:first-child { z-index: 2; }
+.sticky-col-1 tbody tr:hover td:first-child { background: var(--surface-2); }
+
 /* Pipeline ids are fully-qualified dotted paths and are the one column
  * that can push a table past the viewport. Clip it rather than let it
  * shove the columns that carry the run's outcome off-screen; the full
