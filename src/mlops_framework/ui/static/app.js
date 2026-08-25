@@ -3259,66 +3259,40 @@ function lineageIcon(type, small) {
 //   rather than every such edge routing to the same side regardless of
 //   where it was headed.
 // - Same column (`derived_from` between two dataset versions — the
-//   only edge connecting two nodes of the same type): a same-rank edge
-//   has nowhere to the side to run through, so it exits and re-enters
-//   the node's own right edge — a loop out and back, square-cornered
-//   instead of a bow.
-// Two independent sources fanning out into the same column pair (two
-// dataset versions each feeding several training runs, say) used to
-// bend their vertical run through the exact same x — `midX` was just
-// the midpoint between the two columns, the same for every edge in that
-// pair regardless of which node it left from. Wherever their vertical
-// spans overlapped in y they drew on identical pixels, so a run trained
-// on v2 and a run trained on v1 read as one merged trunk with no way to
-// tell which dataset version a given run actually came from. Giving
-// each source its own bend-x lane — spread evenly across the column
-// gap, ordered top to bottom — turns that into parallel bus bars, the
-// same "whose line is this" fix the hub-splitting work made for
-// same-column edges, applied here across columns instead. Lo column,
-// not the edge itself, is the grouping key: every source in a given
-// column shares the same set of lanes, so run5's incoming edge and
-// run2's incoming edge (different targets, same source column) still
-// line up as parallel bars rather than each claiming their own.
-function computeSourceLanes(validEdges, colOf, pos) {
-  const bySourceCol = new Map();
-  for (const e of validEdges) {
-    const lo = colOf.get(e.source), hi = colOf.get(e.target);
-    if (hi - lo !== 1) continue; // same-column and skip edges route differently
-    if (!bySourceCol.has(lo)) bySourceCol.set(lo, new Set());
-    bySourceCol.get(lo).add(e.source);
-  }
-  const laneOf = new Map();
-  for (const sources of bySourceCol.values()) {
-    const ordered = [...sources].sort((a, b) => pos.get(a).y - pos.get(b).y);
-    ordered.forEach((id, index) => laneOf.set(id, { index, count: ordered.length }));
-  }
-  return laneOf;
-}
-
-function lineageEdgeGeometry(e, pos, colOf, NODE_W, NODE_H, laneOf) {
+//   only edge connecting two nodes of the same type): now that
+//   alignColumnsToNeighbours gives each dataset version its own row —
+//   spaced by the block of runs it actually feeds, rather than sitting
+//   on the next line down purely because it's the next version — there
+//   is real vertical room between them. A straight drop from the
+//   source's bottom edge to the target's top edge reads as directly as
+//   two adjacent-column nodes do, no detour needed; the loop-out-and-
+//   back this used to draw only existed because the two nodes used to
+//   sit close enough to have nowhere else to route through.
+//
+// A note on what *used* to live here: every source fanning into the
+// same column pair once got its own bend-x lane, spread across the
+// column gap, so two dataset versions' trunks wouldn't draw on the same
+// pixels where their vertical spans overlapped. alignColumnsToNeighbours
+// (in renderLineageGraph) removed the overlap at the source — v1 and
+// v2 now sit far enough apart in y that their fan-outs never share a
+// row — which made the lanes pure asymmetry with no ambiguity left to
+// justify it: v1's trunk bent near the source side, v2's near the
+// target side, for no reason a viewer could see. Both now share the
+// same bend point again, the same as any other adjacent-column edge,
+// which is what actually reads as symmetric — v1's fan-out above centre
+// and v2's below it, mirrored.
+function lineageEdgeGeometry(e, pos, colOf, NODE_W, NODE_H) {
   const from = pos.get(e.source), to = pos.get(e.target);
   if (colOf.get(e.source) === colOf.get(e.target)) {
-    // Two hubs per node, not two per column-pair: `from` is always
-    // playing the *outgoing* role for this edge, so it uses the exact
-    // same centre-of-right-edge point every other outgoing edge off
-    // that node already uses (trained_with, authorized, ...) — a node
-    // fanning out to several targets is supposed to share one point.
-    // `to` is always playing *incoming*, and gets a second, offset
-    // point reserved for that role, so a node that is both a
-    // same-column source and a same-column target (a DatasetVersion
-    // with an incoming derived_from and an outgoing evaluated_by, say)
-    // never puts its own incoming and outgoing edges on the same pixel.
-    const y1 = from.y + NODE_H / 2, y2 = to.y + NODE_H * 0.82;
-    const x1 = from.x + NODE_W, x2 = to.x + NODE_W;
-    const bowX = Math.max(x1, x2) + 64;
-    return { points: [[x1, y1], [bowX, y1], [bowX, y2], [x2, y2]] };
+    const down = to.y >= from.y;
+    const x = from.x + NODE_W / 2;
+    const y1 = down ? from.y + NODE_H : from.y;
+    const y2 = down ? to.y : to.y + NODE_H;
+    return { points: [[x, y1], [x, y2]] };
   }
   const y1 = from.y + NODE_H / 2, y2 = to.y + NODE_H / 2;
   const x1 = from.x + NODE_W, x2 = to.x;
-  const lane = laneOf && laneOf.get(e.source);
-  const midX = lane
-    ? x1 + (x2 - x1) * (lane.index + 1) / (lane.count + 1)
-    : (x1 + x2) / 2;
+  const midX = (x1 + x2) / 2;
 
   // A skip edge can have another node sitting in a column it passes
   // over. The default route here stays within the [y1, y2] band the
@@ -3489,8 +3463,7 @@ function renderLineageGraph(nodes, edges, rootId) {
         markerWidth: "7", markerHeight: "7", orient: "auto-start-reverse",
       }, svgEl("path", { d: "M0,0 L8,4 L0,8 z", class: "lineage-edge-arrow" }))));
 
-  const laneOf = computeSourceLanes(validEdges, colOf, pos);
-  const geoms = validEdges.map((e) => lineageEdgeGeometry(e, pos, colOf, NODE_W, NODE_H, laneOf));
+  const geoms = validEdges.map((e) => lineageEdgeGeometry(e, pos, colOf, NODE_W, NODE_H));
 
   // Two orthogonal wires crossing on the page read as ambiguous —
   // "did these join, or did they just happen to cross?" — the one
