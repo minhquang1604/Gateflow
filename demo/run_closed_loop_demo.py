@@ -208,12 +208,22 @@ def main() -> int:
     runner.state("State after admin review")
 
     if not decision.approved:
+        # Record the refusal before returning. RetrainingWorkflow writes a
+        # decision row for every verdict its own gates reach, but it is
+        # never called on this path — see request_approval.record_refusal
+        # on why the question has to be asked this early. Without this the
+        # one refusal the whole demo exists to show would be missing from
+        # the one table that counts refusals.
+        decision_id = request_approval.record_refusal(ctx, drift_result, decision)
         banner("RETRAINING REJECTED — production model unchanged")
         detail("The admin denied the retrain (or could not be reached).")
         detail("")
         detail("Nothing downstream happened: no Dataset V2 was built, no")
         detail("training ran, and no model version was created. Model V1 is")
         detail("still the production model, and monitoring continues.")
+        if decision_id is not None:
+            detail("")
+            detail(f"Recorded as governance decision #{decision_id}.")
         ctx.state.monitoring_status = "ACTIVE"
         finalize.run(ctx)
         return 4

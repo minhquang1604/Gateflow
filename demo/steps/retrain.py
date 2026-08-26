@@ -147,6 +147,10 @@ def run(ctx: DemoContext, decision: ApprovalDecision) -> Any:
                 # it quiet for the dilution reason above, and record
                 # "SCHEDULED" — which would be false.
                 trigger_type="DRIFT",
+                # The window evaluation quoted in the comment above, now
+                # cited by the decision record itself rather than left
+                # for a reader to correlate by timestamp.
+                trigger_drift_evaluation_id=ctx.trigger_drift_evaluation_id,
                 # DAG id here; the real callable travels separately.
                 pipeline_id=cfg.dag_id,
                 training_entrypoint=cfg.pipeline_id,

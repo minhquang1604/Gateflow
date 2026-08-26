@@ -249,3 +249,41 @@ def _persist_decision(ctx: DemoContext, decision, *, channel: str) -> None:
                 entity_id=ctx.model_id,
             )
         session.commit()
+
+
+def record_refusal(ctx, drift_result, decision) -> int | None:
+    """Persist a denial that ends the run before the workflow is called.
+
+    The demo has to ask the human here, before dataset V2 exists: V2 is
+    V1 plus the drifted production window, and materialising a new
+    immutable dataset version for a retrain nobody authorised would be
+    worse than asking early. So on a denial the run stops, and
+    ``RetrainingWorkflow`` — which is what writes a decision row for
+    every other governance verdict — is never reached.
+
+    Without this the most important refusal in the system reached the
+    database only as an AuditLog row, and the table that answers "how
+    many retrains were stopped, and at which gate" could not see it.
+
+    The row hangs off the *drifted window* rather than V1: the question
+    was asked because of what was observed in that data, so that is
+    where a reader following the lineage will look for the answer.
+    """
+    from mlops_framework.governance.decision_store import RetrainingDecisionStore
+
+    window_id = ctx.drifted_window_version_id
+    if window_id is None:
+        return None
+
+    with ctx.db.get_session() as session:
+        row = RetrainingDecisionStore(session).record_refusal(
+            dataset_version_id=window_id,
+            model_id=ctx.model_id,
+            responder=decision.responder,
+            reason=decision.reason or "denied",
+            drift_evaluation_id=getattr(drift_result, "evaluation_id", None),
+            trigger_drift_evaluation_id=ctx.trigger_drift_evaluation_id,
+        )
+        decision_id = row.id
+        session.commit()
+    return decision_id

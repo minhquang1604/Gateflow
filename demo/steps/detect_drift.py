@@ -88,6 +88,9 @@ def run(ctx: DemoContext) -> Any:
 
     ctx.state.drift_status = "DRIFT_DETECTED"
     ctx.state.drift_event_id = event_id
+    # The evaluation itself, not the event announcing it: this is what
+    # the decision record cites as the retrain's justification.
+    ctx.trigger_drift_evaluation_id = getattr(result, "evaluation_id", None)
     ctx.state.approval_status = "PENDING"
 
     banner("DRIFT DETECTION EVENT")

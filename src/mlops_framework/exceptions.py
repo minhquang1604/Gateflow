@@ -215,6 +215,19 @@ class DriftError(MLopsFrameworkError):
     pass
 
 
+class UnrelatedDriftEvidenceError(DriftError):
+    """Raised when a caller attaches drift evidence to a decision that the
+    evidence does not concern.
+
+    A governance record whose cited evidence is unrelated to the data it
+    judged is worse than one citing none: it reads as substantiated and
+    is not. The store therefore refuses the link rather than storing a
+    claim it cannot support.
+    """
+
+    pass
+
+
 class PromotionPolicyError(MLopsFrameworkError):
     """Base exception for model-promotion policy errors."""
 

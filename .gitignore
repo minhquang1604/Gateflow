@@ -75,3 +75,10 @@ alembic/versions/*.pyc
 # case_studies/fraud_detection/README.md for how to fetch it.
 case_studies/*/data/creditcard.csv
 
+
+# Paper draft and the IEEE template it is built from. Kept out of the
+# repository deliberately: the review process may be double-blind, and a
+# draft carrying the author's name in a public repo would compromise
+# that. Also avoids committing the 670 KB IEEEtran manual.
+paper/
+IEEE_Conference_Template.zip

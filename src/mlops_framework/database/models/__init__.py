@@ -51,6 +51,7 @@ from mlops_framework.database.models.readiness_evaluation import (
     ReadinessStatus,
 )
 from mlops_framework.database.models.retraining_decision import (
+    DecisionRecordedBy,
     RetrainingDecision,
     RetrainingOutcomeStatus,
 )
@@ -67,6 +68,7 @@ __all__ = [
     "AuditLog",
     "Dataset",
     "DatasetVersion",
+    "DecisionRecordedBy",
     "DriftEvaluation",
     "DriftOutcome",
     "FrameworkSetting",

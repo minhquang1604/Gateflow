@@ -71,6 +71,34 @@ class RetrainingOutcomeStatus(str, enum.Enum):
     COMPLETED = "COMPLETED"
 
 
+class DecisionRecordedBy(str, enum.Enum):
+    """Which side of the framework boundary wrote the row.
+
+    ``WORKFLOW`` means :class:`RetrainingWorkflow` ran and its gates
+    produced the verdict — readiness, drift, eligibility, approval and
+    promotion were evaluated in order, and whichever one stopped the
+    chain is named in ``blocked_at_step``.
+
+    ``CALLER`` means a caller refused *before* entering the workflow, so
+    no gate ran at all. The closed-loop demo is the reference case: it
+    must ask the human before building dataset V2 (V2 is V1 plus the
+    drifted production data, which is only worth materialising once a
+    retrain is authorised — the same constraint ``RecordedDecisionGate``
+    exists for), so a denial there ends the run before the workflow is
+    ever called.
+
+    Both are real governance decisions and both belong in this table —
+    counting refusals from one place is the whole point of it. But they
+    are not the same fact, and a row that could not say which it was
+    would make the table's own provenance weaker than the provenance it
+    records. Every gate column on a ``CALLER`` row is NULL, because none
+    of those gates ran.
+    """
+
+    WORKFLOW = "WORKFLOW"
+    CALLER = "CALLER"
+
+
 class RetrainingDecision(Base, TimestampMixin):
     """An auditable record of one governed retraining attempt.
 
@@ -101,7 +129,25 @@ class RetrainingDecision(Base, TimestampMixin):
         ForeignKey("readiness_evaluations.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # The workflow's own reference-versus-candidate comparison: does the
+    # data we are about to train on actually differ from the data behind
+    # the incumbent model?
     drift_evaluation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("drift_evaluations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # The observation that *caused* the retrain to be proposed, which is
+    # a different comparison: production traffic against the reference,
+    # made before any candidate dataset existed. Auditing "why was this
+    # retrain justified?" wants this one.
+    #
+    # Both are kept because together they detect a failure neither
+    # detects alone: a high trigger score with a low candidate score
+    # means production drifted but the new training set barely differs
+    # from the old, so the retrain will not address the shift. Recording
+    # only one discards the signal, and it cannot be recovered later
+    # without re-running the whole lifecycle.
+    trigger_drift_evaluation_id: Mapped[int | None] = mapped_column(
         ForeignKey("drift_evaluations.id", ondelete="SET NULL"),
         nullable=True,
     )
@@ -123,6 +169,12 @@ class RetrainingDecision(Base, TimestampMixin):
     )
 
     # The verdict ------------------------------------------------------ #
+    recorded_by: Mapped[str] = mapped_column(
+        SQLEnum(DecisionRecordedBy, name="decision_recorded_by_enum"),
+        nullable=False,
+        index=True,
+        default=DecisionRecordedBy.WORKFLOW,
+    )
     outcome: Mapped[str] = mapped_column(
         SQLEnum(RetrainingOutcomeStatus, name="retraining_outcome_enum"),
         nullable=False,

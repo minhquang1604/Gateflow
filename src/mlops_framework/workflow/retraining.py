@@ -47,7 +47,6 @@ from mlops_framework.database.models.model_version import (
 )
 from mlops_framework.database.models.retraining_decision import (
     RetrainingDecision,
-    RetrainingOutcomeStatus,
 )
 from mlops_framework.database.models.training_run import (
     TrainingRun,
@@ -62,6 +61,7 @@ from mlops_framework.events.publisher import (
     TrainingFailedEvent,
 )
 from mlops_framework.events.store import GovernanceEventStore
+from mlops_framework.governance.decision_store import RetrainingDecisionStore
 from mlops_framework.governance.eligibility import (
     EligibilityConfig,
     TrainingEligibilityPolicy,
@@ -220,6 +220,7 @@ class RetrainingWorkflow:
         approval_timeout: float = 3600.0,
         evaluate_model: Callable[[ModelVersion], dict[str, Any]] | None = None,
         force: bool = False,
+        trigger_drift_evaluation_id: int | None = None,
     ) -> RetrainingOutcome:
         """Run the full retraining workflow.
 
@@ -291,11 +292,25 @@ class RetrainingWorkflow:
                 provided, the workflow uses the metrics that the
                 pipeline attached to the run metadata.
             force: Force the eligibility step to allow retraining.
+            trigger_drift_evaluation_id: The drift evaluation that caused
+                this retrain to be proposed. Distinct from the one this
+                workflow computes: that compares the reference version
+                against the candidate, whereas the trigger compared
+                production traffic against the reference, before any
+                candidate existed. Auditing "why was this retrain
+                justified?" wants the trigger, so a caller that observed
+                one should pass it. Rejected if it does not concern this
+                dataset version or an ancestor of it.
 
         Returns:
             :class:`RetrainingOutcome` with the full step trace.
         """
         steps: list[StepResult] = []
+        # Threaded to _finalize through the instance rather than through
+        # seven call sites: every exit path funnels into one place, and
+        # adding a parameter to each return would be seven chances to
+        # forget one.
+        self._trigger_drift_evaluation_id = trigger_drift_evaluation_id
 
         # 1. Readiness -----------------------------------------------------
         readiness_result = self._readiness.evaluate(
@@ -915,80 +930,23 @@ class RetrainingWorkflow:
         promoted: bool,
         blocked_reason: str | None,
     ) -> RetrainingDecision:
-        """Write the :class:`RetrainingDecision` row for this execution."""
-        by_name = {s.name: s for s in steps}
+        """Write the :class:`RetrainingDecision` row for this execution.
 
-        readiness = by_name.get("readiness")
-        drift = by_name.get("drift")
-        eligibility = by_name.get("eligibility")
-        approval = by_name.get("approval")
-
-        if promoted:
-            outcome = RetrainingOutcomeStatus.PROMOTED
-        elif blocked_reason is not None:
-            outcome = RetrainingOutcomeStatus.BLOCKED
-        else:
-            outcome = RetrainingOutcomeStatus.COMPLETED
-
-        # The gate that stopped it is the last one that failed. Only
-        # meaningful on a blocked run: on a promoted one the "event" step
-        # fails whenever no publisher is configured, which is a normal
-        # configuration, not a governance refusal.
-        blocked_at_step: str | None = None
-        if blocked_reason is not None:
-            blocked_at_step = next(
-                (s.name for s in reversed(steps) if not s.passed), None
-            )
-
-        row = RetrainingDecision(
+        Delegates to :class:`RetrainingDecisionStore`, which is also what
+        a caller refusing *before* the workflow writes through — one
+        writer, so the two cannot drift apart on what a NULL gate column
+        means.
+        """
+        return RetrainingDecisionStore(self._session).record_workflow_outcome(
             dataset_version_id=dataset_version.id,
             model_id=model.id,
-            readiness_evaluation_id=_step_evaluation_id(readiness),
-            drift_evaluation_id=_step_evaluation_id(drift),
+            steps=[s.to_dict() for s in steps],
+            trigger_drift_evaluation_id=getattr(
+                self, "_trigger_drift_evaluation_id", None
+            ),
             training_run_id=training_run_id,
             model_version_id=model_version_id,
             promotion_event_id=promotion_event_id,
-            outcome=outcome,
-            blocked_at_step=blocked_at_step,
+            promoted=promoted,
             blocked_reason=blocked_reason,
-            # None, not False, when the gate never ran — see the column
-            # comments on RetrainingDecision.
-            eligible=eligibility.passed if eligibility is not None else None,
-            approved=approval.passed if approval is not None else None,
-            approval_responder=(
-                approval.data.get("responder") if approval is not None else None
-            ),
-            approval_reason=(
-                approval.data.get("reason") if approval is not None else None
-            ),
-            steps_json=json.dumps([s.to_dict() for s in steps]),
         )
-        self._session.add(row)
-        self._session.flush()
-        return row
-
-
-# ---------------------------------------------------------------------- #
-# Helpers
-# ---------------------------------------------------------------------- #
-
-
-def _step_evaluation_id(step: StepResult | None) -> int | None:
-    """The stored evaluation row a readiness/drift step came from.
-
-    ``ReadinessResult`` and ``DriftResult`` both carry the primary key of
-    the row they were persisted as, and both are serialized wholesale
-    into the step's ``data``. Reading it back from there beats
-    re-querying for "the newest evaluation on this dataset version": two
-    concurrent workflows on the same version would each find the other's
-    row half the time, and the foreign key would quietly point at the
-    wrong decision's evidence.
-
-    ``None`` when the step did not run, or when the result was built
-    without being stored — a ``DriftResult`` from a bare
-    :class:`DriftDetector`, for instance.
-    """
-    if step is None:
-        return None
-    value = step.data.get("evaluation_id")
-    return value if isinstance(value, int) else None

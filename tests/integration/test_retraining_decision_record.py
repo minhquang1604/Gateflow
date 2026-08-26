@@ -648,3 +648,145 @@ class TestCallerRecordedRefusal:
             _recorded_by(_decisions(session)[0])
             == DecisionRecordedBy.WORKFLOW.value
         )
+
+
+# ---------------------------------------------------------------------- #
+# Trigger evidence: the drift that justified the retrain
+# ---------------------------------------------------------------------- #
+
+
+class TestTriggerDriftEvidence:
+    """The workflow re-evaluates drift between the reference version and
+    the candidate; the observation that *caused* the retrain compared
+    production traffic against the reference, earlier, before any
+    candidate existed. Only the second answers "why was this justified?",
+    and citing the first in its place answers a different question with a
+    number that looks like an answer.
+    """
+
+    def _drift_row(self, session, ref_id: int, cur_id: int, score: float):
+        from mlops_framework.database.models.drift_evaluation import (
+            DriftEvaluation,
+            DriftOutcome,
+        )
+
+        row = DriftEvaluation(
+            reference_dataset_version_id=ref_id,
+            current_dataset_version_id=cur_id,
+            method="ks",
+            outcome=DriftOutcome.DRIFT_DETECTED,
+            score=score,
+            threshold=0.05,
+        )
+        session.add(row)
+        session.flush()
+        return row
+
+    def test_trigger_is_recorded_alongside_the_internal_check(
+        self, workflow_env
+    ):
+        session = workflow_env["db_session"]
+        dm = DatasetManager(session)
+        ds = dm.create_dataset(name="fraud-ds", description="d")
+        meta = {"columns": [{"name": "amount", "dtype": "float64"}]}
+        v1 = dm.create_version(
+            dataset_id=ds.id, storage_uri="s3://b/v1.csv",
+            row_count=8000, metadata=meta,
+        )
+        window = dm.create_version(
+            dataset_id=ds.id, storage_uri="s3://b/w.csv",
+            row_count=1000, metadata=meta,
+        )
+        v2 = dm.create_version(
+            dataset_id=ds.id, storage_uri="s3://b/v2.csv",
+            row_count=9000, metadata=meta, parent_version_id=v1.id,
+        )
+        # The alert: production window against the reference.
+        trigger = self._drift_row(session, v1.id, window.id, 0.2490)
+
+        workflow_env["build"]().run(
+            dataset_version=v2,
+            model=_model(session),
+            training_policy=TrainingPolicy(required_size=100),
+            pipeline_id=SUCCESS_PIPELINE,
+            promotion_config=PromotionConfig(min_metrics={"f1": 0.1}),
+            trigger_drift_evaluation_id=trigger.id,
+        )
+        row = _decisions(session)[0]
+        assert row.trigger_drift_evaluation_id == trigger.id
+
+    def test_evidence_about_other_data_is_refused(self, workflow_env):
+        """A record whose cited evidence is unrelated to the data it
+        judged reads as substantiated and is not."""
+        from mlops_framework.exceptions import UnrelatedDriftEvidenceError
+
+        session = workflow_env["db_session"]
+        dm = DatasetManager(session)
+        ds = dm.create_dataset(name="fraud-ds", description="d")
+        other = dm.create_dataset(name="unrelated-ds", description="d")
+        meta = {"columns": [{"name": "amount", "dtype": "float64"}]}
+        v1 = dm.create_version(
+            dataset_id=ds.id, storage_uri="s3://b/v1.csv",
+            row_count=5000, metadata=meta,
+        )
+        o1 = dm.create_version(
+            dataset_id=other.id, storage_uri="s3://b/o1.csv",
+            row_count=5000, metadata=meta,
+        )
+        o2 = dm.create_version(
+            dataset_id=other.id, storage_uri="s3://b/o2.csv",
+            row_count=5000, metadata=meta,
+        )
+        stray = self._drift_row(session, o1.id, o2.id, 0.9)
+
+        with pytest.raises(UnrelatedDriftEvidenceError):
+            RetrainingDecisionStore(session).record_refusal(
+                dataset_version_id=v1.id,
+                model_id=_model(session).id,
+                responder="alice@example.com",
+                reason="not now",
+                trigger_drift_evaluation_id=stray.id,
+            )
+
+    def test_ancestor_evidence_is_accepted(self, workflow_env):
+        """The normal case: the alert compared traffic against the
+        *previous* version, and the candidate is that version's child."""
+        session = workflow_env["db_session"]
+        dm = DatasetManager(session)
+        ds = dm.create_dataset(name="fraud-ds", description="d")
+        meta = {"columns": [{"name": "amount", "dtype": "float64"}]}
+        v1 = dm.create_version(
+            dataset_id=ds.id, storage_uri="s3://b/v1.csv",
+            row_count=8000, metadata=meta,
+        )
+        window = dm.create_version(
+            dataset_id=ds.id, storage_uri="s3://b/w.csv",
+            row_count=1000, metadata=meta,
+        )
+        v2 = dm.create_version(
+            dataset_id=ds.id, storage_uri="s3://b/v2.csv",
+            row_count=9000, metadata=meta, parent_version_id=v1.id,
+        )
+        trigger = self._drift_row(session, v1.id, window.id, 0.2490)
+
+        row = RetrainingDecisionStore(session).record_refusal(
+            dataset_version_id=v2.id,
+            model_id=_model(session).id,
+            responder="alice@example.com",
+            reason="seasonal",
+            trigger_drift_evaluation_id=trigger.id,
+        )
+        assert row.trigger_drift_evaluation_id == trigger.id
+
+    def test_missing_evidence_is_refused(self, workflow_env):
+        from mlops_framework.exceptions import UnrelatedDriftEvidenceError
+
+        session = workflow_env["db_session"]
+        with pytest.raises(UnrelatedDriftEvidenceError):
+            RetrainingDecisionStore(session).record_refusal(
+                dataset_version_id=_dataset_version(session).id,
+                model_id=_model(session).id,
+                responder="alice@example.com",
+                reason="x",
+                trigger_drift_evaluation_id=99999,
+            )

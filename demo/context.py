@@ -77,6 +77,11 @@ class DemoContext:
     v2_version_id: int | None = None
     normal_window_version_id: int | None = None
     drifted_window_version_id: int | None = None
+    # Row id of the DriftEvaluation that raised the alert -- distinct
+    # from state.drift_event_id, which is a GovernanceEvent. The decision
+    # record cites this one, because "what drift justified this retrain?"
+    # is answered by the measurement, not by the notification about it.
+    trigger_drift_evaluation_id: int | None = None
     model_id: int | None = None
     v1_model_version_id: int | None = None
     v2_model_version_id: int | None = None
