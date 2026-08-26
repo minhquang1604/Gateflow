@@ -1,0 +1,105 @@
+{
+  "model_version_id": 2,
+  "recorded": 12,
+  "total": 14,
+  "attributes": [
+    {
+      "id": 1,
+      "name": "Dataset identity",
+      "category": "entity",
+      "recorded": true,
+      "evidence": "datasets.name = 'credit-card-fraud'"
+    },
+    {
+      "id": 2,
+      "name": "Immutable dataset version",
+      "category": "entity",
+      "recorded": true,
+      "evidence": "dataset_versions.id=4 v2, is_immutable=True"
+    },
+    {
+      "id": 3,
+      "name": "Dataset content hash",
+      "category": "entity",
+      "recorded": true,
+      "evidence": "dataset_versions.checksum = 9142473a2b53478f095c9d0298ca371b154ebc51ebddd1c76f2d350ebf24791e"
+    },
+    {
+      "id": 4,
+      "name": "Dataset ancestry (derived-from)",
+      "category": "entity",
+      "recorded": true,
+      "evidence": "dataset_versions.parent_version_id = 1"
+    },
+    {
+      "id": 5,
+      "name": "Model artifact location",
+      "category": "entity",
+      "recorded": true,
+      "evidence": "artifact_uri is NULL; retrievable via recorded mlflow_run_id 361b221bae8f4eb7ad0e975a327eceb7"
+    },
+    {
+      "id": 6,
+      "name": "Training run identity",
+      "category": "activity",
+      "recorded": true,
+      "evidence": "training_runs.id=2, mlflow_run_id=361b221bae8f4eb7ad0e975a327eceb7"
+    },
+    {
+      "id": 7,
+      "name": "Hyperparameters and seed",
+      "category": "activity",
+      "recorded": true,
+      "evidence": "retrievable via recorded mlflow_run_id 361b221bae8f4eb7ad0e975a327eceb7"
+    },
+    {
+      "id": 8,
+      "name": "Resulting metrics",
+      "category": "activity",
+      "recorded": true,
+      "evidence": "model_versions.metrics_json = ['average_precision', 'f1', 'precision', 'recall', 'roc_auc', 'scale_pos_weight']"
+    },
+    {
+      "id": 9,
+      "name": "Code version (revision)",
+      "category": "activity",
+      "recorded": false,
+      "evidence": "training_runs.pipeline_id='mlops_training_pipeline' identifies the entry point, not the revision"
+    },
+    {
+      "id": 10,
+      "name": "Dependency environment",
+      "category": "activity",
+      "recorded": false,
+      "evidence": "artifact logged via log_artifact(); no requirements.txt, conda.yaml or python_env.yaml alongside it"
+    },
+    {
+      "id": 11,
+      "name": "Drift evidence for the trigger",
+      "category": "agent",
+      "recorded": true,
+      "evidence": "drift_evaluations.id=2, score=0.2490, ref=v1 cur=v3"
+    },
+    {
+      "id": 12,
+      "name": "Eligibility verdict",
+      "category": "agent",
+      "recorded": true,
+      "evidence": "retraining_decisions.eligible=True, reasons='eligible'"
+    },
+    {
+      "id": 13,
+      "name": "Human approval and responder",
+      "category": "agent",
+      "recorded": true,
+      "evidence": "approved=True, responder='demo:auto-approve'"
+    },
+    {
+      "id": 14,
+      "name": "Promotion decision and policy",
+      "category": "agent",
+      "recorded": true,
+      "evidence": "promotion event id=None, policy recorded in steps_json: True"
+    }
+  ]
+}
