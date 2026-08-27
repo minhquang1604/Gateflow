@@ -313,7 +313,53 @@ def train_xgboost(config: dict) -> dict:
                 with mlflow.start_run(run_id=tracker_run_id):
                     mlflow.log_params(params)
                     mlflow.log_metrics(metrics)
+                    # The serialised booster, kept for callers that fetch
+                    # the file directly (the serving bridge does).
                     mlflow.log_artifact(artifact_path)
+                    # And the model as a model, which is what captures the
+                    # dependency environment: log_model resolves the
+                    # versions this run actually trained under and writes
+                    # them beside the artifact as requirements.txt,
+                    # conda.yaml and python_env.yaml. log_artifact alone
+                    # stores the bytes and nothing about what produced
+                    # them, so two runs at different library versions were
+                    # previously indistinguishable from the record.
+                    #
+                    # Also logs the dataset it consumed, so the run
+                    # carries a content digest of its input independently
+                    # of the framework's own checksum.
+                    try:
+                        import mlflow.xgboost  # noqa: PLC0415
+
+                        mlflow.log_input(
+                            mlflow.data.from_pandas(
+                                df,
+                                source=str(csv_uri),
+                                name=str(config.get("dataset_name", "dataset")),
+                                targets=target_col,
+                            ),
+                            context="training",
+                        )
+                        # X_train is an ndarray, so the example is
+                        # rebuilt as a frame to carry the column names
+                        # into the signature. Without them the signature
+                        # records positions rather than features, which
+                        # is worse than no signature for anyone trying
+                        # to reproduce the call.
+                        mlflow.xgboost.log_model(
+                            model,
+                            artifact_path="model",
+                            input_example=pd.DataFrame(
+                                X_train[:5], columns=feature_cols
+                            ),
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        # Never fail a completed training run over
+                        # provenance enrichment: the model exists and its
+                        # metrics are already logged.
+                        print(
+                            f"[fraud-xgboost] model/dataset logging skipped: {exc}"
+                        )
             except Exception as exc:  # pragma: no cover - env dependent
                 # A real failure here (most commonly a missing
                 # MLFLOW_S3_ENDPOINT_URL / AWS_ACCESS_KEY_ID / AWS_SECRET_
