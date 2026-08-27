@@ -1,0 +1,32 @@
+{
+  "tolerance": 1e-06,
+  "gateflow": [
+    {
+      "model_version_id": 1,
+      "recorded_f1": 0.9032258064516129,
+      "digest_verified": true,
+      "rebuilt_f1": 0.9206349206349206,
+      "delta": 0.017409114183307706,
+      "reproduced": false
+    },
+    {
+      "model_version_id": 2,
+      "recorded_f1": 0.8732394366197183,
+      "digest_verified": true,
+      "rebuilt_f1": 0.8857142857142857,
+      "delta": 0.01247484909456742,
+      "reproduced": false
+    }
+  ],
+  "b0": [
+    {
+      "model": "b0-fraud-xgboost",
+      "version": "1",
+      "recorded_f1": 0.8732394366197183,
+      "dataset_uri": "/opt/demo_data/dataset_v2.csv",
+      "rebuilt_f1": 0.8857142857142857,
+      "delta": 0.01247484909456742,
+      "reproduced": false
+    }
+  ]
+}

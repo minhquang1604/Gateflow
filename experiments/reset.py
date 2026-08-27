@@ -122,17 +122,67 @@ def reset_mlflow(client: Any, experiment_name: str | None = None) -> str:
             f"deleted {total} run(s) across {len(targets)} experiment(s): {names}"
         )
 
-    deleted = 0
-    try:
-        for rm in client.search_registered_models(max_results=1000):
-            client.delete_registered_model(rm.name)
-            deleted += 1
-    except Exception as exc:  # noqa: BLE001 - registry may be unavailable
-        notes.append(f"registry not cleared: {exc}")
-    else:
-        notes.append(f"deleted {deleted} registered model(s)")
-
+    notes.append(_clear_registry(client))
     return "; ".join(notes)
+
+
+def _registry_names_via_rest(tracking_uri: str) -> list[str] | None:
+    """List registered models over the REST API rather than the client.
+
+    The client library and the server are not necessarily the same major
+    version --- a 3.x client talking to a 2.20 server returns an empty
+    list from ``search_registered_models`` while the server holds several
+    --- and a reset that believes an empty list has cleared nothing while
+    reporting success. That is the failure this module exists to prevent,
+    and it happened here: a stale ``Production`` version survived three
+    consecutive resets and silently decided a later promotion.
+
+    The REST endpoint is stable across both versions, so it is the
+    authority. Returns ``None`` when the server cannot be reached at all,
+    which is a different thing from an empty registry.
+    """
+    import requests
+
+    try:
+        r = requests.get(
+            f"{tracking_uri.rstrip('/')}/api/2.0/mlflow/registered-models/search",
+            params={"max_results": 1000},
+            timeout=20,
+        )
+        r.raise_for_status()
+    except Exception:  # noqa: BLE001 - unreachable server
+        return None
+    return [m["name"] for m in r.json().get("registered_models", [])]
+
+
+def _clear_registry(client: Any) -> str:
+    """Delete every registered model, then verify the registry is empty.
+
+    Verifying is the point. Every delete call here returned success while
+    the models remained, so a reset that trusts its own delete calls is
+    exactly as useful as one that does nothing.
+    """
+    from mlops_framework.tracking.mlflow_client import tracking_uri
+
+    uri = tracking_uri() or ""
+    names = _registry_names_via_rest(uri)
+    if names is None:
+        return "registry not cleared: server unreachable"
+
+    for name in names:
+        try:
+            client.delete_registered_model(name)
+        except Exception as exc:  # noqa: BLE001 - fall through to the check
+            print(f"  (delete_registered_model({name!r}) raised: {exc})")
+
+    remaining = _registry_names_via_rest(uri)
+    if remaining:
+        raise RuntimeError(
+            f"registry still holds {remaining} after deletion; a stale "
+            "Production version will decide the next promotion and every "
+            "number measured afterwards will be wrong"
+        )
+    return f"deleted {len(names)} registered model(s), registry verified empty"
 
 
 # ---------------------------------------------------------------------- #

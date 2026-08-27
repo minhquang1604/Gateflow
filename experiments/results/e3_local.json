@@ -1,0 +1,117 @@
+[
+  {
+    "scenario": "no_drift",
+    "label": "No drift",
+    "expected": "BLOCK",
+    "expected_gate": "eligibility",
+    "gateflow": {
+      "outcome": "BLOCK",
+      "stopped_at": "eligibility",
+      "blocked_reason": "not_eligible",
+      "decision_id": 12,
+      "model_version_id": null,
+      "steps": [
+        "readiness",
+        "drift",
+        "eligibility"
+      ],
+      "correct": true
+    }
+  },
+  {
+    "scenario": "low_volume",
+    "label": "Insufficient new data",
+    "expected": "BLOCK",
+    "expected_gate": "eligibility",
+    "gateflow": {
+      "outcome": "BLOCK",
+      "stopped_at": "eligibility",
+      "blocked_reason": "not_eligible",
+      "decision_id": 13,
+      "model_version_id": null,
+      "steps": [
+        "readiness",
+        "drift",
+        "eligibility"
+      ],
+      "correct": true
+    }
+  },
+  {
+    "scenario": "rejected",
+    "label": "Rejected by operator",
+    "expected": "BLOCK",
+    "expected_gate": "approval",
+    "gateflow": {
+      "outcome": "BLOCK",
+      "stopped_at": "approval",
+      "blocked_reason": "approval_denied",
+      "decision_id": 14,
+      "model_version_id": null,
+      "steps": [
+        "readiness",
+        "drift",
+        "eligibility",
+        "approval"
+      ],
+      "correct": true
+    }
+  },
+  {
+    "scenario": "below_floor",
+    "label": "Approved, below quality floor",
+    "expected": "BLOCK",
+    "expected_gate": "promotion",
+    "gateflow": {
+      "outcome": "BLOCK",
+      "stopped_at": "promotion",
+      "blocked_reason": "model_rejected",
+      "decision_id": 15,
+      "model_version_id": 5,
+      "steps": [
+        "readiness",
+        "drift",
+        "eligibility",
+        "approval",
+        "training",
+        "promotion"
+      ],
+      "correct": true,
+      "recoverability": {
+        "found": true,
+        "stores": 1,
+        "correlations": 0,
+        "note": "model_versions.id -> retraining_decisions.model_version_id, a foreign key within one store; the row names the gate, the policy, the evidence and the responder"
+      }
+    }
+  },
+  {
+    "scenario": "promote",
+    "label": "Approved, acceptable",
+    "expected": "PROMOTE",
+    "expected_gate": null,
+    "gateflow": {
+      "outcome": "PROMOTE",
+      "stopped_at": null,
+      "blocked_reason": null,
+      "decision_id": 16,
+      "model_version_id": 6,
+      "steps": [
+        "readiness",
+        "drift",
+        "eligibility",
+        "approval",
+        "training",
+        "promotion",
+        "event"
+      ],
+      "correct": true,
+      "recoverability": {
+        "found": true,
+        "stores": 1,
+        "correlations": 0,
+        "note": "model_versions.id -> retraining_decisions.model_version_id, a foreign key within one store; the row names the gate, the policy, the evidence and the responder"
+      }
+    }
+  }
+]

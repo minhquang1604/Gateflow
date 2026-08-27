@@ -1,0 +1,121 @@
+{
+  "model": "b0-fraud-xgboost",
+  "version": "1",
+  "recorded": 11,
+  "reachable": 11,
+  "total": 14,
+  "attributes": [
+    {
+      "id": 1,
+      "name": "Dataset identity",
+      "category": "entity",
+      "recorded": true,
+      "reachable": true,
+      "evidence": "mlflow.log_input dataset name = 'credit-card-fraud', source = {\"uri\": \"/opt/demo_data/dataset_v2.csv\"}"
+    },
+    {
+      "id": 2,
+      "name": "Immutable dataset version",
+      "category": "entity",
+      "recorded": true,
+      "reachable": true,
+      "evidence": "mlflow.log_input digest = e032fe1d identifies the content (no version ordering or immutability guarantee)"
+    },
+    {
+      "id": 3,
+      "name": "Dataset content hash",
+      "category": "entity",
+      "recorded": true,
+      "reachable": true,
+      "evidence": "mlflow.log_input digest = e032fe1d (MLflow's own content hash; shorter than SHA-256 but a content hash nonetheless)"
+    },
+    {
+      "id": 4,
+      "name": "Dataset ancestry (derived-from)",
+      "category": "entity",
+      "recorded": false,
+      "reachable": false,
+      "evidence": "no ancestry recorded; MLflow relates runs to models, not dataset versions to their predecessors"
+    },
+    {
+      "id": 5,
+      "name": "Model artifact location",
+      "category": "entity",
+      "recorded": true,
+      "reachable": true,
+      "evidence": "model_version.source = s3://mlflow-artifacts/2/c3e1007fac62486aa1486017fb4c5a97/artifacts/model"
+    },
+    {
+      "id": 6,
+      "name": "Training run identity",
+      "category": "activity",
+      "recorded": true,
+      "reachable": true,
+      "evidence": "mlflow run_id = c3e1007fac62486aa1486017fb4c5a97"
+    },
+    {
+      "id": 7,
+      "name": "Hyperparameters and seed",
+      "category": "activity",
+      "recorded": true,
+      "reachable": true,
+      "evidence": "7 params logged, including the seed"
+    },
+    {
+      "id": 8,
+      "name": "Resulting metrics",
+      "category": "activity",
+      "recorded": true,
+      "reachable": true,
+      "evidence": "3 metrics logged: ['f1', 'precision', 'recall']"
+    },
+    {
+      "id": 9,
+      "name": "Code version (revision)",
+      "category": "activity",
+      "recorded": false,
+      "reachable": false,
+      "evidence": "mlflow.source.git.commit absent (run did not originate in a git working tree)"
+    },
+    {
+      "id": 10,
+      "name": "Dependency environment",
+      "category": "activity",
+      "recorded": true,
+      "reachable": true,
+      "evidence": "log_model() wrote ['2/c3e1007fac62486aa1486017fb4c5a97/artifacts/model/conda.yaml', '2/c3e1007fac62486aa1486017fb4c5a97/artifacts/model/python_env.yaml', '2/c3e1007fac62486aa1486017fb4c5a97/artifacts/model/requirements.txt']"
+    },
+    {
+      "id": 11,
+      "name": "Drift evidence for the trigger",
+      "category": "agent",
+      "recorded": true,
+      "reachable": true,
+      "evidence": "Airflow task 'check_drift' state=success, xcom={'score': 0.875, 'alpha': 0.05, 'corrected_alpha': 0.0016666666666666668, 'featu; via mlflow.runName -> Airflow dag_run 'b0-1787737456'"
+    },
+    {
+      "id": 12,
+      "name": "Eligibility verdict",
+      "category": "agent",
+      "recorded": true,
+      "reachable": true,
+      "evidence": "Airflow task 'gate_eligibility' state=success, xcom=True; via mlflow.runName -> Airflow dag_run 'b0-1787737456'"
+    },
+    {
+      "id": 13,
+      "name": "Human approval and responder",
+      "category": "agent",
+      "recorded": false,
+      "reachable": false,
+      "evidence": "Airflow task 'gate_approval' state=success records the decision but no responder identity; Airflow's log table attributes tasks to the system account"
+    },
+    {
+      "id": 14,
+      "name": "Promotion decision and policy",
+      "category": "agent",
+      "recorded": true,
+      "reachable": true,
+      "evidence": "Airflow task 'gate_promotion' state=success, xcom=True; via mlflow.runName -> Airflow dag_run 'b0-1787737456'"
+    }
+  ]
+}

@@ -1,0 +1,130 @@
+{
+  "scenarios": [
+    {
+      "scenario": "no_drift",
+      "label": "No drift",
+      "justified": false,
+      "expected": "BLOCK",
+      "expected_gate": "drift",
+      "b0": {
+        "run_id": "e2-no_drift-1787768681",
+        "dag_state": "success",
+        "outcome": "BLOCK",
+        "stopped_at": "drift",
+        "task_states": {
+          "gate_drift": "success",
+          "check_readiness": "success",
+          "check_drift": "success",
+          "gate_eligibility": "skipped",
+          "gate_approval": "skipped",
+          "train": "skipped",
+          "gate_promotion": "skipped",
+          "promote": "skipped"
+        }
+      },
+      "b0_correct": true
+    },
+    {
+      "scenario": "low_volume",
+      "label": "Insufficient new data",
+      "justified": false,
+      "expected": "BLOCK",
+      "expected_gate": "eligibility",
+      "b0": {
+        "run_id": "e2-low_volume-1787768687",
+        "dag_state": "success",
+        "outcome": "BLOCK",
+        "stopped_at": "eligibility",
+        "task_states": {
+          "gate_eligibility": "success",
+          "check_readiness": "success",
+          "check_drift": "success",
+          "gate_drift": "success",
+          "gate_approval": "skipped",
+          "train": "skipped",
+          "gate_promotion": "skipped",
+          "promote": "skipped"
+        }
+      },
+      "b0_correct": true
+    },
+    {
+      "scenario": "rejected",
+      "label": "Rejected by operator",
+      "justified": false,
+      "expected": "BLOCK",
+      "expected_gate": "approval",
+      "b0": {
+        "run_id": "e2-rejected-1787768694",
+        "dag_state": "success",
+        "outcome": "BLOCK",
+        "stopped_at": "approval",
+        "task_states": {
+          "gate_drift": "success",
+          "check_readiness": "success",
+          "check_drift": "success",
+          "gate_eligibility": "success",
+          "train": "skipped",
+          "gate_promotion": "skipped",
+          "promote": "skipped",
+          "gate_approval": "success"
+        }
+      },
+      "b0_correct": true
+    },
+    {
+      "scenario": "below_floor",
+      "label": "Approved, below quality floor",
+      "justified": false,
+      "expected": "BLOCK",
+      "expected_gate": "promotion",
+      "b0": {
+        "run_id": "e2-below_floor-1787768706",
+        "dag_state": "success",
+        "outcome": "BLOCK",
+        "stopped_at": "promotion",
+        "task_states": {
+          "train": "success",
+          "promote": "skipped",
+          "gate_promotion": "success",
+          "check_readiness": "success",
+          "gate_eligibility": "success",
+          "check_drift": "success",
+          "gate_drift": "success",
+          "gate_approval": "success"
+        }
+      },
+      "b0_correct": true
+    },
+    {
+      "scenario": "promote",
+      "label": "Approved, acceptable",
+      "justified": true,
+      "expected": "PROMOTE",
+      "expected_gate": null,
+      "b0": {
+        "run_id": "e2-promote-1787768725",
+        "dag_state": "success",
+        "outcome": "PROMOTE",
+        "stopped_at": null,
+        "task_states": {
+          "check_readiness": "success",
+          "check_drift": "success",
+          "gate_eligibility": "success",
+          "gate_approval": "success",
+          "train": "success",
+          "gate_drift": "success",
+          "gate_promotion": "success",
+          "promote": "success"
+        }
+      },
+      "b0_correct": true
+    }
+  ],
+  "cost": {
+    "b0_gate_lines": 83,
+    "b0_wiring_lines": 8,
+    "b0_scope": "one DAG; a second pipeline re-implements them",
+    "gateflow_scope": "configuration passed to a shared implementation; a second pipeline passes different values to the same gates"
+  }
+}

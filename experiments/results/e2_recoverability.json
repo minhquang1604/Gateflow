@@ -1,0 +1,16 @@
+{
+  "gateflow": {
+    "found": true,
+    "stores": 1,
+    "correlations": 0,
+    "note": "model_versions.id -> retraining_decisions.model_version_id, a foreign key within one store; the row names the gate, the policy, the evidence and the responder"
+  },
+  "b0": {
+    "found": true,
+    "stores": 2,
+    "correlations": 1,
+    "note": "model_version -> run is a key within MLflow; run -> Airflow dag_run is a prefix parsed out of mlflow.runName, which no constraint enforces; dag_run -> gate verdicts is a key within Airflow. The middle step is the correlation."
+  },
+  "gateflow_model_version_id": 4,
+  "b0_version": "3"
+}

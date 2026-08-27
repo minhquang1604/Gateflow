@@ -1,0 +1,243 @@
+{
+  "gateflow": {
+    "model_version_id": 2,
+    "recorded": 13,
+    "reachable": 13,
+    "total": 14,
+    "attributes": [
+      {
+        "id": 1,
+        "name": "Dataset identity",
+        "category": "entity",
+        "recorded": true,
+        "reachable": true,
+        "evidence": "datasets.name = 'credit-card-fraud'"
+      },
+      {
+        "id": 2,
+        "name": "Immutable dataset version",
+        "category": "entity",
+        "recorded": true,
+        "reachable": true,
+        "evidence": "dataset_versions.id=4 v2, is_immutable=True"
+      },
+      {
+        "id": 3,
+        "name": "Dataset content hash",
+        "category": "entity",
+        "recorded": true,
+        "reachable": true,
+        "evidence": "dataset_versions.checksum = 9142473a2b53478f095c9d0298ca371b154ebc51ebddd1c76f2d350ebf24791e"
+      },
+      {
+        "id": 4,
+        "name": "Dataset ancestry (derived-from)",
+        "category": "entity",
+        "recorded": true,
+        "reachable": true,
+        "evidence": "dataset_versions.parent_version_id = 1"
+      },
+      {
+        "id": 5,
+        "name": "Model artifact location",
+        "category": "entity",
+        "recorded": true,
+        "reachable": true,
+        "evidence": "artifact_uri is NULL; retrievable via recorded mlflow_run_id 16d67e7db9b847be8d60fad1df28c37e"
+      },
+      {
+        "id": 6,
+        "name": "Training run identity",
+        "category": "activity",
+        "recorded": true,
+        "reachable": true,
+        "evidence": "training_runs.id=2, mlflow_run_id=16d67e7db9b847be8d60fad1df28c37e"
+      },
+      {
+        "id": 7,
+        "name": "Hyperparameters and seed",
+        "category": "activity",
+        "recorded": true,
+        "reachable": true,
+        "evidence": "retrievable via recorded mlflow_run_id 16d67e7db9b847be8d60fad1df28c37e"
+      },
+      {
+        "id": 8,
+        "name": "Resulting metrics",
+        "category": "activity",
+        "recorded": true,
+        "reachable": true,
+        "evidence": "model_versions.metrics_json = ['average_precision', 'f1', 'precision', 'recall', 'roc_auc', 'scale_pos_weight']"
+      },
+      {
+        "id": 9,
+        "name": "Code version (revision)",
+        "category": "activity",
+        "recorded": false,
+        "reachable": false,
+        "evidence": "training_runs.pipeline_id='mlops_training_pipeline' identifies the entry point, not the revision"
+      },
+      {
+        "id": 10,
+        "name": "Dependency environment",
+        "category": "activity",
+        "recorded": true,
+        "reachable": true,
+        "evidence": "log_model() wrote ['model/conda.yaml', 'model/python_env.yaml', 'model/requirements.txt']"
+      },
+      {
+        "id": 11,
+        "name": "Drift evidence for the trigger",
+        "category": "agent",
+        "recorded": true,
+        "reachable": true,
+        "evidence": "drift_evaluations.id=2, score=0.2490, ref=v1 cur=v3"
+      },
+      {
+        "id": 12,
+        "name": "Eligibility verdict",
+        "category": "agent",
+        "recorded": true,
+        "reachable": true,
+        "evidence": "retraining_decisions.eligible=True, reasons='eligible'"
+      },
+      {
+        "id": 13,
+        "name": "Human approval and responder",
+        "category": "agent",
+        "recorded": true,
+        "reachable": true,
+        "evidence": "approved=True, responder='demo:auto-approve'"
+      },
+      {
+        "id": 14,
+        "name": "Promotion decision and policy",
+        "category": "agent",
+        "recorded": true,
+        "reachable": true,
+        "evidence": "promotion event id=None, policy recorded in steps_json: True"
+      }
+    ]
+  },
+  "b0": {
+    "model": "b0-fraud-xgboost",
+    "version": "1",
+    "recorded": 11,
+    "reachable": 11,
+    "total": 14,
+    "attributes": [
+      {
+        "id": 1,
+        "name": "Dataset identity",
+        "category": "entity",
+        "recorded": true,
+        "reachable": true,
+        "evidence": "mlflow.log_input dataset name = 'credit-card-fraud', source = {\"uri\": \"/opt/demo_data/dataset_v2.csv\"}"
+      },
+      {
+        "id": 2,
+        "name": "Immutable dataset version",
+        "category": "entity",
+        "recorded": true,
+        "reachable": true,
+        "evidence": "mlflow.log_input digest = e032fe1d identifies the content (no version ordering or immutability guarantee)"
+      },
+      {
+        "id": 3,
+        "name": "Dataset content hash",
+        "category": "entity",
+        "recorded": true,
+        "reachable": true,
+        "evidence": "mlflow.log_input digest = e032fe1d (MLflow's own content hash; shorter than SHA-256 but a content hash nonetheless)"
+      },
+      {
+        "id": 4,
+        "name": "Dataset ancestry (derived-from)",
+        "category": "entity",
+        "recorded": false,
+        "reachable": false,
+        "evidence": "no ancestry recorded; MLflow relates runs to models, not dataset versions to their predecessors"
+      },
+      {
+        "id": 5,
+        "name": "Model artifact location",
+        "category": "entity",
+        "recorded": true,
+        "reachable": true,
+        "evidence": "model_version.source = s3://mlflow-artifacts/2/e6784c517bcc47d0986885fe9f0984f3/artifacts/model"
+      },
+      {
+        "id": 6,
+        "name": "Training run identity",
+        "category": "activity",
+        "recorded": true,
+        "reachable": true,
+        "evidence": "mlflow run_id = e6784c517bcc47d0986885fe9f0984f3"
+      },
+      {
+        "id": 7,
+        "name": "Hyperparameters and seed",
+        "category": "activity",
+        "recorded": true,
+        "reachable": true,
+        "evidence": "7 params logged, including the seed"
+      },
+      {
+        "id": 8,
+        "name": "Resulting metrics",
+        "category": "activity",
+        "recorded": true,
+        "reachable": true,
+        "evidence": "3 metrics logged: ['f1', 'precision', 'recall']"
+      },
+      {
+        "id": 9,
+        "name": "Code version (revision)",
+        "category": "activity",
+        "recorded": false,
+        "reachable": false,
+        "evidence": "mlflow.source.git.commit absent (run did not originate in a git working tree)"
+      },
+      {
+        "id": 10,
+        "name": "Dependency environment",
+        "category": "activity",
+        "recorded": true,
+        "reachable": true,
+        "evidence": "log_model() wrote ['2/e6784c517bcc47d0986885fe9f0984f3/artifacts/model/conda.yaml', '2/e6784c517bcc47d0986885fe9f0984f3/artifacts/model/python_env.yaml', '2/e6784c517bcc47d0986885fe9f0984f3/artifacts/model/requirements.txt']"
+      },
+      {
+        "id": 11,
+        "name": "Drift evidence for the trigger",
+        "category": "agent",
+        "recorded": true,
+        "reachable": true,
+        "evidence": "Airflow task 'check_drift' state=success, xcom={'score': 0.875, 'alpha': 0.05, 'corrected_alpha': 0.0016666666666666668, 'featu; via mlflow.runName -> Airflow dag_run 'b0-1787764804'"
+      },
+      {
+        "id": 12,
+        "name": "Eligibility verdict",
+        "category": "agent",
+        "recorded": true,
+        "reachable": true,
+        "evidence": "Airflow task 'gate_eligibility' state=success, xcom=True; via mlflow.runName -> Airflow dag_run 'b0-1787764804'"
+      },
+      {
+        "id": 13,
+        "name": "Human approval and responder",
+        "category": "agent",
+        "recorded": false,
+        "reachable": false,
+        "evidence": "Airflow task 'gate_approval' state=success records the decision but no responder identity; Airflow's log table attributes tasks to the system account"
+      },
+      {
+        "id": 14,
+        "name": "Promotion decision and policy",
+        "category": "agent",
+        "recorded": true,
+        "reachable": true,
+        "evidence": "Airflow task 'gate_promotion' state=success, xcom=True; via mlflow.runName -> Airflow dag_run 'b0-1787764804'"
+      }
+    ]
+  }
+}
