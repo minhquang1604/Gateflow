@@ -1,0 +1,54 @@
+{
+  "storage": {
+    "governance_tables": {
+      "retraining_decisions": {
+        "rows": 28,
+        "bytes": 303104,
+        "bytes_per_row": 10825.142857142857
+      },
+      "readiness_evaluations": {
+        "rows": 29,
+        "bytes": 90112,
+        "bytes_per_row": 3107.310344827586
+      },
+      "drift_evaluations": {
+        "rows": 30,
+        "bytes": 139264,
+        "bytes_per_row": 4642.133333333333
+      },
+      "promotion_events": {
+        "error": "(psycopg.errors.UndefinedTable) relation \"promotion_events\" does not exist\nLINE 1: SELECT count(*) FROM promotion_events"
+      }
+    },
+    "airflow_tables": {
+      "dag_run": {
+        "rows": 26,
+        "bytes": 163840,
+        "bytes_per_row": 6301.538461538462
+      },
+      "task_instance": {
+        "rows": 200,
+        "bytes": 352256,
+        "bytes_per_row": 1761.28
+      },
+      "xcom": {
+        "rows": 167,
+        "bytes": 163840,
+        "bytes_per_row": 981.0778443113772
+      }
+    },
+    "decisions": 28,
+    "dag_runs": 26,
+    "bytes_per_decision": 19017.14285714286,
+    "bytes_per_dag_run": 26151.384615384617
+  },
+  "latency": {
+    "writes": 200,
+    "median_ms": 1.81,
+    "p95_ms": 3.49,
+    "max_ms": 4.372,
+    "marginal_rows": 10000,
+    "marginal_bytes_per_decision": 416.2
+  },
+  "run_seconds": 280.0
+}

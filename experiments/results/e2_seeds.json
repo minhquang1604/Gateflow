@@ -1,0 +1,192 @@
+[
+  {
+    "seed_offset": 0,
+    "normal_seed": 1001,
+    "drifted_seed": 2002,
+    "window": "sweep_normal_k0.csv",
+    "scenario": "no_drift",
+    "expected": "BLOCK",
+    "b0": {
+      "outcome": "BLOCK",
+      "stopped_at": "drift",
+      "correct": true
+    },
+    "gateflow": {
+      "outcome": "BLOCK",
+      "stopped_at": "eligibility",
+      "error": null,
+      "correct": true
+    }
+  },
+  {
+    "seed_offset": 0,
+    "normal_seed": 1001,
+    "drifted_seed": 2002,
+    "window": "sweep_drifted_k0.csv",
+    "scenario": "promote",
+    "expected": "PROMOTE",
+    "b0": {
+      "outcome": "PROMOTE",
+      "stopped_at": null,
+      "correct": true
+    },
+    "gateflow": {
+      "outcome": "PROMOTE",
+      "stopped_at": null,
+      "error": null,
+      "correct": true
+    }
+  },
+  {
+    "seed_offset": 1,
+    "normal_seed": 8920,
+    "drifted_seed": 9921,
+    "window": "sweep_normal_k1.csv",
+    "scenario": "no_drift",
+    "expected": "BLOCK",
+    "b0": {
+      "outcome": "BLOCK",
+      "stopped_at": "drift",
+      "correct": true
+    },
+    "gateflow": {
+      "outcome": "BLOCK",
+      "stopped_at": "eligibility",
+      "error": null,
+      "correct": true
+    }
+  },
+  {
+    "seed_offset": 1,
+    "normal_seed": 8920,
+    "drifted_seed": 9921,
+    "window": "sweep_drifted_k1.csv",
+    "scenario": "promote",
+    "expected": "PROMOTE",
+    "b0": {
+      "outcome": "PROMOTE",
+      "stopped_at": null,
+      "correct": true
+    },
+    "gateflow": {
+      "outcome": "PROMOTE",
+      "stopped_at": null,
+      "error": null,
+      "correct": true
+    }
+  },
+  {
+    "seed_offset": 2,
+    "normal_seed": 16839,
+    "drifted_seed": 17840,
+    "window": "sweep_normal_k2.csv",
+    "scenario": "no_drift",
+    "expected": "BLOCK",
+    "b0": {
+      "outcome": "BLOCK",
+      "stopped_at": "drift",
+      "correct": true
+    },
+    "gateflow": {
+      "outcome": "BLOCK",
+      "stopped_at": "eligibility",
+      "error": null,
+      "correct": true
+    }
+  },
+  {
+    "seed_offset": 2,
+    "normal_seed": 16839,
+    "drifted_seed": 17840,
+    "window": "sweep_drifted_k2.csv",
+    "scenario": "promote",
+    "expected": "PROMOTE",
+    "b0": {
+      "outcome": "PROMOTE",
+      "stopped_at": null,
+      "correct": true
+    },
+    "gateflow": {
+      "outcome": "PROMOTE",
+      "stopped_at": null,
+      "error": null,
+      "correct": true
+    }
+  },
+  {
+    "seed_offset": 3,
+    "normal_seed": 24758,
+    "drifted_seed": 25759,
+    "window": "sweep_normal_k3.csv",
+    "scenario": "no_drift",
+    "expected": "BLOCK",
+    "b0": {
+      "outcome": "BLOCK",
+      "stopped_at": "drift",
+      "correct": true
+    },
+    "gateflow": {
+      "outcome": "BLOCK",
+      "stopped_at": "eligibility",
+      "error": null,
+      "correct": true
+    }
+  },
+  {
+    "seed_offset": 3,
+    "normal_seed": 24758,
+    "drifted_seed": 25759,
+    "window": "sweep_drifted_k3.csv",
+    "scenario": "promote",
+    "expected": "PROMOTE",
+    "b0": {
+      "outcome": "PROMOTE",
+      "stopped_at": null,
+      "correct": true
+    },
+    "gateflow": {
+      "outcome": "PROMOTE",
+      "stopped_at": null,
+      "error": null,
+      "correct": true
+    }
+  },
+  {
+    "seed_offset": 4,
+    "normal_seed": 32677,
+    "drifted_seed": 33678,
+    "window": "sweep_normal_k4.csv",
+    "scenario": "no_drift",
+    "expected": "BLOCK",
+    "b0": {
+      "outcome": "BLOCK",
+      "stopped_at": "drift",
+      "correct": true
+    },
+    "gateflow": {
+      "outcome": "BLOCK",
+      "stopped_at": "eligibility",
+      "error": null,
+      "correct": true
+    }
+  },
+  {
+    "seed_offset": 4,
+    "normal_seed": 32677,
+    "drifted_seed": 33678,
+    "window": "sweep_drifted_k4.csv",
+    "scenario": "promote",
+    "expected": "PROMOTE",
+    "b0": {
+      "outcome": "PROMOTE",
+      "stopped_at": null,
+      "correct": true
+    },
+    "gateflow": {
+      "outcome": "PROMOTE",
+      "stopped_at": null,
+      "error": null,
+      "correct": true
+    }
+  }
+]

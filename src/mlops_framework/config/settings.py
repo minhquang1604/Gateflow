@@ -119,6 +119,30 @@ class Settings(BaseSettings):
         description="How long to wait for the admin's Approve/Deny before treating a retrain as denied.",
     )
 
+    # Slack admin-approval gate (see approval/slack.py). Slack has no
+    # equivalent of Telegram's getUpdates for button presses: a click is
+    # delivered to *you*, so the gate needs either a public endpoint or a
+    # Socket Mode connection. It uses the latter, which is why there are
+    # two tokens — a bot token to post the message and an app-level token
+    # to open the socket the answer arrives on.
+    slack_bot_token: str | None = Field(
+        default=None,
+        description="Slack bot token (xoxb-...) used to post the approval request.",
+    )
+    slack_app_token: str | None = Field(
+        default=None,
+        description="Slack app-level token (xapp-...) with connections:write, "
+                    "used to open the Socket Mode connection the answer arrives on.",
+    )
+    slack_approval_channel: str | None = Field(
+        default=None,
+        description="Slack channel id the approval request is posted to.",
+    )
+    slack_approval_timeout_seconds: float = Field(
+        default=3600.0,
+        description="How long to wait for Approve/Deny before treating a retrain as denied.",
+    )
+
     # Scheduling (cron-triggered automatic retraining — see
     # scheduling/runner.py and api/app.py's _start_scheduler). Off by
     # default: a background loop that can trigger real training runs

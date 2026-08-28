@@ -39,6 +39,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+slack = [
+    # Only needed by approval/slack.py. Kept out of the core dependencies
+    # because a framework that cannot be installed without a Slack client
+    # would be making a channel choice on its user's behalf.
+    "slack-sdk>=3.27.0",
+]
+
 dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
